@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Get-MsolRoleReport.ps1 - Reports on Office 365 Admin Role
+Search-AdminRoleChanges.ps1 - Reports on Office 365 Admin Role
 
 .DESCRIPTION 
 This script produces a report of the membership of Office 365 admin role groups.
