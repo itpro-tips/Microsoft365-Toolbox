@@ -8,13 +8,11 @@ By default, the report contains only the groups with members.
 To get all the role, included empty roles, add -IncludeEmptyRoles $true
 
 .OUTPUTS
-The report is output to an array
+The report is output to an array contained all the audit logs found.
+To export in a csv, do Search-AdminRoleChanges | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRolesChange.csv"
 
 .EXAMPLE
-.\Get-MsolRoleReport.ps1
-
-.EXAMPLE
-.\Get-MsolRoleReport.ps1 -IncludeEmptyRoles $true
+Search-AdminRoleChanges
 
 .LINK
 https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes/
@@ -43,8 +41,22 @@ function Search-AdminRoleChanges {
 	[CmdletBinding()]
 	param (
 	)
-	
-	$records = Search-UnifiedAuditLog -StartDate (Get-Date).AddDays(-90) -EndDate (Get-Date).AddDays(1) -Operations ('Add Member to Role', 'Remove Member From Role') -ResultSize 2000 -Formatted
+    
+    try {
+        Import-Module exchangeonlinemanagement -ErrorAction stop
+    }
+    catch {
+        Write-Warning 'First, install the official Microsoft Exchange Online Management module : Install-Module exchangeonlinemanagement'
+        return
+    }
+
+    try {
+        $records = Search-UnifiedAuditLog -StartDate (Get-Date).AddDays(-90) -EndDate (Get-Date).AddDays(1) -Operations ('Add Member to Role', 'Remove Member From Role') -ResultSize 2000 -Formatted-ErrorAction Stop
+    }
+    catch {
+        Connect-ExchangeOnline
+        $records = Search-UnifiedAuditLog -StartDate (Get-Date).AddDays(-90) -EndDate (Get-Date).AddDays(1) -Operations ('Add Member to Role', 'Remove Member From Role') -ResultSize 2000 -Formatted
+    }
 
 	if ($records.Count -eq 0) {
 		Write-Host 'No audit logs found'
