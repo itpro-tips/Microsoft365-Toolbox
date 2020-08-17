@@ -61,7 +61,6 @@ function Get-MsolRoleReport {
     }
 
     # Use MsolService because returns more role and allows MFA status 
-    #$azureADRoles = Get-AzureADDirectoryRole
     
     $rolesMembership = New-Object 'System.Collections.Generic.List[System.Object]'
 
