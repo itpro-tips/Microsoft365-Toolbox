@@ -9,13 +9,16 @@ To get all the role, included empty roles, add -IncludeEmptyRoles $true
 
 .OUTPUTS
 The report is output to an array contained all the audit logs found.
-To export in a csv, do Get-MsolRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRolesChange.csv"
+To export in a csv, do Get-MsolRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRoles.csv" -Encoding UTF8
 
 .EXAMPLE
 Get-MsolRoleReport
 
 .EXAMPLE
-Get-MsolRoleReport.ps1 -IncludeEmptyRoles $true
+Get-MsolRoleReport -IncludeEmptyRoles $true
+
+.EXAMPLE
+Get-MsolRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRoles.csv" -Encoding UTF8
 
 .LINK
 https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes/
@@ -95,6 +98,7 @@ function Get-MsolRoleReport {
                     'MemberAccountEnabled'    = '-'
                     'MemberLastDirSyncTime'   = '-'
                     'MemberMFAState'          = '-'
+                    'MemberObjectID'          = '-'
                 }
                 
                 $rolesMembership.Add($object)
@@ -103,34 +107,61 @@ function Get-MsolRoleReport {
                 continue
             }
 
-            foreach ($roleMember in $roleMembers) {
-                # Sometimes, user is service account, not present in Office 365. We set ErrorAction SilentlyContinue to prevent error
-                $member = Get-MsolUser -objectid $roleMember.ObjectID -ErrorAction SilentlyContinue
-                
-                $MFAState = $member.StrongAuthenticationRequirements.State
-                
-                if ($null -eq $MFA) {
-                    $MFAState = 'Disabled'
-                }
-
-                if ($null -eq $member.LastDirSyncTime) {
-                    $lastDirSyncTime = 'Not a synchronized user'
+            foreach ($roleMember in $roleMembers) {                
+                # if user already exist in the arraylist, we look for to prevent a new Get-MsolUser (time consuming)
+                # Select only the first if user already exists in multiple roles
+                if ($rolesMembership.MemberObjectID -contains $roleMember.ObjectID) {
+                    $found = $rolesMembership | Where-Object { $_.MemberObjectID -eq $roleMember.ObjectID } | Select-Object -First 1
+                    $object = [PSCustomObject] [ordered]@{
+                        'Role'                    = $msolRole.Name
+                        'RoleDescription'         = $msolRole.Description
+                        'MemberDisplayName'       = $found.MemberDisplayName
+                        'MemberUserPrincipalName' = $found.MemberUserPrincipalName
+                        'MemberEmail'             = $found.MemberEmail
+                        'MemberAlternateEmail'    = $found.MemberAlternateEmail
+                        'RoleMemberType'          = $found.RoleMemberType
+                        'MemberAccountEnabled'    = $found.MemberAccountEnabled
+                        'MemberLastDirSyncTime'   = $found.MemberLastDirSyncTime
+                        'MemberMFAState'          = $found.MemberMFAState
+                        'MemberObjectID'          = $found.MemberObjectID
+                    }
                 }
                 else {
-                    $lastDirSyncTime = $member.LastDirSyncTime
-                }
+                    if ($roleMember.RoleMemberType -eq 'ServicePrincipal') {
+                        $member = Get-MsolServicePrincipal -SearchString $roleMember.DisplayName
+                    }
+                    # Sometimes, user is service account, not present in Office 365. We set ErrorAction SilentlyContinue to prevent error. not handle non user type
+                    else {
+                        $member = Get-MsolUser -objectid $roleMember.ObjectID -ErrorAction SilentlyContinue
+                    }
+                    
+                    
+                    $MFAState = $member.StrongAuthenticationRequirements.State
+                    
+                    if ($null -eq $MFA) {
+                        $MFAState = 'Disabled'
+                    }
+    
+                    if ($null -eq $member.LastDirSyncTime) {
+                        $lastDirSyncTime = 'Not a synchronized user'
+                    }
+                    else {
+                        $lastDirSyncTime = $member.LastDirSyncTime
+                    }
 
-                $object = [PSCustomObject] [ordered]@{
-                    'Role'                    = $msolRole.Name
-                    'RoleDescription'         = $msolRole.Description
-                    'MemberDisplayName'       = $roleMember.DisplayName
-                    'MemberUserPrincipalName' = $roleMember.UserPrincipalName
-                    'MemberEmail'             = $roleMember.EmailAddress
-                    'MemberAlternateEmail'    = $roleMember.AlternateEmailAddresses
-                    'RoleMemberType'          = $roleMember.RoleMemberType
-                    'MemberAccountEnabled'    = -not $roleMember.AccountEnabled # BlockCredential is the opposite 
-                    'MemberLastDirSyncTime'   = $lastDirSyncTime
-                    'MemberMFAState'          = $MFAState
+                    $object = [PSCustomObject] [ordered]@{
+                        'Role'                    = $msolRole.Name
+                        'RoleDescription'         = $msolRole.Description
+                        'MemberDisplayName'       = $roleMember.DisplayName
+                        'MemberUserPrincipalName' = $member.UserPrincipalName
+                        'MemberEmail'             = $roleMember.EmailAddress
+                        'MemberAlternateEmail'    = $member.AlternateEmailAddresses | ForEach-Object { $_ -join '|' }
+                        'RoleMemberType'          = $roleMember.RoleMemberType
+                        'MemberAccountEnabled'    = -not $member.AccountEnabled # BlockCredential is the opposite 
+                        'MemberLastDirSyncTime'   = $lastDirSyncTime
+                        'MemberMFAState'          = $MFAState
+                        'MemberObjectID'          = $member.ObjectId
+                    }
                 }
 
                 $rolesMembership.Add($object)
