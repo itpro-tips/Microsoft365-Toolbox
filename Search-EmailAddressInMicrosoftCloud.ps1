@@ -1,4 +1,6 @@
-﻿function Search-EmailAddressInMicrosoftCloud {
+﻿# https://github.com/itpro-tips/Microsoft365-Toolbox
+# itpro-tips.com/itpro-tips/Microsoft365-Toolbox
+function Search-EmailAddressInMicrosoftCloud {
     [CmdletBinding()]
     Param(
         [string[]]$SearchEmails
