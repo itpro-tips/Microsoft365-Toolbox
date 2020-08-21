@@ -16,6 +16,8 @@ Search-AdminRoleChanges
 
 .LINK
 https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes/
+https://github.com/itpro-tips/Microsoft365-Toolbox/blob/master/Audit/Search-AdminRolesChanges.ps1
+
 
 .NOTES
 Written by Bastien Perez (ITPro-Tips.com)
