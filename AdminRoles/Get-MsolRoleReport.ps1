@@ -22,6 +22,7 @@ Get-MsolRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)
 
 .LINK
 https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes/
+https://github.com/itpro-tips/Microsoft365-Toolbox/blob/master/AdminRoles/Get-MsolRoleReport.ps1
 
 .NOTES
 Written by Bastien Perez (ITPro-Tips.com)
