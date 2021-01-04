@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Search-AdminRoleChanges.ps1 - Reports on Office 365 Admin Role
+Search-AdminRolesChanges.ps1 - Reports on Office 365 Admin Role
 
 .DESCRIPTION 
 This script produces a report of the membership of Office 365 admin role groups.
@@ -9,10 +9,10 @@ To get all the role, included empty roles, add -IncludeEmptyRoles $true
 
 .OUTPUTS
 The report is output to an array contained all the audit logs found.
-To export in a csv, do Search-AdminRoleChanges | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRolesChange.csv"
+To export in a csv, do Search-AdminRolesChanges | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRolesChange.csv"
 
 .EXAMPLE
-Search-AdminRoleChanges
+Search-AdminRolesChanges
 
 .LINK
 https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes/
@@ -40,7 +40,7 @@ DEALINGS IN THE SOFTWARE.
 #>
 
 # Admin roles list: https://docs.microsoft.com/en-us/microsoft-365/compliance/search-the-audit-log-in-security-and-compliance?view=o365-worldwide
-function Search-AdminRoleChanges {
+function Search-AdminRolesChanges {
 	[CmdletBinding()]
 	param (
 		[string[]]$ObjectIDs
