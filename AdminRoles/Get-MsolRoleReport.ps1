@@ -77,13 +77,13 @@ function Get-MsolRoleReport {
             }
         }
 
-        Write-Host -ForegroundColor green "Processing role $($msolRole.Name)..." -NoNewline
+        Write-Host -ForegroundColor green "Role $($msolRole.Name) - " -NoNewline
         
         try {
 
             $roleMembers = Get-MsolRoleMember -RoleObjectId $msolRole.ObjectId
             
-            Write-Host -ForegroundColor green " $($roleMembers.count) member(s) found"
+            Write-Host -ForegroundColor green "Member(s) found: $($roleMembers.count)"
 
             if ($IncludeEmptyRoles -and $roleMembers.count -eq 0) {
                 $object = [PSCustomObject] [ordered]@{
