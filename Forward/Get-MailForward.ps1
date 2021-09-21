@@ -2,7 +2,7 @@
 # Priority 2: forwardingSMTPAddress
 # Priority 3: inbox rule
 
-Function Get-AllForward {
+Function Get-MailForward {
 
 	[CmdletBinding()] 
 	Param 
@@ -265,6 +265,8 @@ Function Get-AllForward {
 			}
 		}
 	}
+
+	Write-Host -ForegroundColor cyan "$($mailboxesWithForward.count) mailboxes with forward found"
 
 	$mailboxesWithForward | ForEach-Object {
 		if ((($_.ForwardingAddressConverted -like '*@*') -and -not($domains -contains $_.ForwardingAddressConverted.split('@')[1])) -or (($_.ForwardingSMTPAddress -like '*@*') -and -not($domains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or (($_.InboxRuleForwardTo -like '*@*') -and -not($domains -contains $_.InboxRuleForwardTo)) -or (($_.InboxRuleForwardAsAttachmentTo -like '*@*') -and -not($domains -contains $_.InboxRuleForwardAsAttachmentTo)) -or (($_.InboxRuleRedirectTo -like '*@*') -and -not($domains -contains $_.InboxRuleRedirectTo)) -or ($_.InboxRuleSendTextMessageNotificationTo -ne '-')) {
