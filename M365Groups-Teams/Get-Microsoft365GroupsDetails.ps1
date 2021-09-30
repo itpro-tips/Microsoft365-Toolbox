@@ -49,7 +49,7 @@ Connect-SPOService https://$domain-admin.sharepoint.com
 	foreach ($group in $groups) {
 		$i++
 
-		[string]$channelsNames = [string]$teamOwnersEmails = [string]$uGroupMembersEmail = [string]$teamGuestsEmails = ''
+		[string]$channelsNames = [string]$teamOwnersEmails = [string]$uGroupMembersEmail = [string]$teamGuestsEmails = [string]$uGroupOwnersEmail = ''
 		$teamEnabled = $false
 		$team = $null
 		Write-Host "Get details for $($group.Name) - $i of $($groups.count)" -ForegroundColor Cyan
@@ -65,7 +65,7 @@ Connect-SPOService https://$domain-admin.sharepoint.com
 		$uGroupOwners = Get-UnifiedGroupLinks -Identity $uGroup.DistinguishedName -LinkType Owners
 
 		if ($uGroupOwners.PrimarySmtpAddress) {
-			$uGroupOwners | ForEach-Object { $uGroupOwnersEmail += $_ }
+			$uGroupOwners | ForEach-Object { $uGroupOwnersEmail += $uGroupOwnersEmail+'|'+$_ }
 		}
 
 		# If Team-Enabled, we can find the date of the last chat compliance record
