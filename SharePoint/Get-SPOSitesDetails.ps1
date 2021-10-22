@@ -115,10 +115,10 @@ Function Get-SPOSitesDetails {
     }
 
 
-    Write-Host "SharePoint Online sites Count is $($spoSites.count)"
+    Write-Verbose "SharePoint Online sites Count is $($spoSites.count)"
 
     foreach ($spoSite in $spoSites) {
-        Write-host "Get details for SharePoint site $($object.Url)"
+        Write-Verbose "Get details for SharePoint site $($object.Url)"
 
         $object = $spoSite
     
