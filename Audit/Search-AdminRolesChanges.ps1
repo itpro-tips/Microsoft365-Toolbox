@@ -68,20 +68,20 @@ function Search-AdminRolesChanges {
 	}
 	
 	try {
-		$maxAdminLogAge = [System.TimeSpan]::Parse((Get-AdminAuditLogConfig).AdminAuditLogAgeLimit).Days
-
+		#$maxAdminLogAge = [System.TimeSpan]::Parse((Get-AdminAuditLogConfig).AdminAuditLogAgeLimit).Days
+		$maxAdminLogAge = 365
 		Write-Host 'Search Add/Remove Member to Role actions logs'-ForegroundColor Cyan
 
-		if($ObjectIDs) {
+		if ($ObjectIDs) {
 			$objects = New-Object System.Collections.Generic.List[String]
-			foreach($obj in $ObjectIDs) {
+			foreach ($obj in $ObjectIDs) {
 				$user = Get-User $obj
 				$null = $objects.Add($user.UserPrincipalName)
 				$null = $objects.Add($user.ExternalDirectoryObjectId)
-		}
+			}
 				
 		}
-		else{
+		else {
 			# Set tp $null to search All
 			$objects = $null 
 		}
@@ -103,25 +103,25 @@ function Search-AdminRolesChanges {
 		$report = New-Object System.Collections.Generic.List[Object]
 		ForEach ($record in $records) {
 			$auditData = ConvertFrom-Json $record.Auditdata
-	
+
 			$timeStamp = Get-Date $record.CreationDate -format g
 
 			# Test if ObjectID is GUID or the UserPrincipalName
-			if($auditData.ObjectID -match '(?im)^[{(]?[0-9A-F]{8}[-]?(?:[0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$'){
+			if ($auditData.ObjectID -match '(?im)^[{(]?[0-9A-F]{8}[-]?(?:[0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$') {
 				$objectID = $auditData.ObjectID
 			}
-			else{
-				$objectID = ($auditData.Target | Where-Object {$_.Type -eq 2 -and $_.ID -match '(?im)^[{(]?[0-9A-F]{8}[-]?(?:[0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$'}).ID # several values are with Type=2 ('User_GUID', 'GUID', 'User', 'NetID') The good value is a GUID so we filter one the value which matches GUID
+			else {
+				$objectID = ($auditData.Target | Where-Object { $_.Type -eq 2 -and $_.ID -match '(?im)^[{(]?[0-9A-F]{8}[-]?(?:[0-9A-F]{4}[-]?){3}[0-9A-F]{12}[)}]?$' }).ID # several values are with Type=2 ('User_GUID', 'GUID', 'User', 'NetID') The good value is a GUID so we filter one the value which matches GUID
 			}
 			
 			$object = [PSCustomObject]@{
-				TimeStamp      	= $timeStamp
-				ObjectId       	= $objectID
-				ObjectUserPrincipalName	= ($auditData.Target | Where-Object {$_.Type -eq 5}).Id # value is @{ID=xxx@domain; Type=5
-				RoleName       	= $auditData.modifiedproperties.newvalue[1]
-				Action         	= $auditData.Operation
-				Actor          	= $auditData.UserId
-				ActorIpAddress	= $auditData.ActorIpAddress
+				TimeStamp               = $timeStamp
+				ObjectId                = $objectID
+				ObjectUserPrincipalName	= ($auditData.Target | Where-Object { $_.Type -eq 5 }).Id # value is @{ID=xxx@domain; Type=5
+				RoleName                = $auditData.modifiedproperties.newvalue[1]
+				Action                  = $auditData.Operation
+				Actor                   = $auditData.UserId
+				ActorIpAddress          = $auditData.ActorIpAddress
 			}      
 	   
 			$report.Add($object)

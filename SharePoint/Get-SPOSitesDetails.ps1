@@ -59,7 +59,7 @@ Function Get-SPOSitesDetails {
     [System.Collections.Generic.List[PSObject]]$spoSitesInfos = @()
 
     Write-Verbose 'Get SharePoint Online sites Details'
-    if($ExcludeOneDrive) {
+    if ($ExcludeOneDrive) {
         $spoSites = Get-SPOSite -Limit All -IncludePersonalSite $false
 
     }
