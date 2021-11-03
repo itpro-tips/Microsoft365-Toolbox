@@ -56,7 +56,7 @@ function Search-AdminRolesChanges {
 		$null = Get-Command Search-UnifiedAuditLog -ErrorAction Stop
 	}
 	catch {
-		Write-Host 'Connect to Exchange Online'-ForegroundColor Cyan
+		Write-Host 'Connect to Exchange Online' -ForegroundColor Cyan
 		
 		try {
 			Connect-ExchangeOnline -ShowBanner:$false -ErrorAction Stop
@@ -70,7 +70,7 @@ function Search-AdminRolesChanges {
 	try {
 		#$maxAdminLogAge = [System.TimeSpan]::Parse((Get-AdminAuditLogConfig).AdminAuditLogAgeLimit).Days
 		$maxAdminLogAge = 365
-		Write-Host 'Search Add/Remove Member to Role actions logs'-ForegroundColor Cyan
+		Write-Host 'Search Add/Remove Member to Role actions logs' -ForegroundColor Cyan
 
 		if ($ObjectIDs) {
 			$objects = New-Object System.Collections.Generic.List[String]
