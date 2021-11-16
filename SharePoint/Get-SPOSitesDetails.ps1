@@ -1,8 +1,160 @@
 
 Function Get-SPOSitesDetails {
+    [CmdletBinding()]
     Param(
-        [boolean]$ExcludeOneDrive
+        [boolean]$ExcludeOneDrive,
+        [boolean]$OnlyOneDrive,
+        [boolean]$M365GroupsDetails
     )
+
+    # https://diecknet.de/en/2021/07/09/Sharepoint-Online-Timezones-by-PowerShell/
+    function Convert-SPOTimezoneToString(
+        # ID of a SPO Timezone
+        [int]$ID
+    ) {
+        <#
+        .SYNOPSIS
+        Convert a Sharepoint Online Time zone ID to a human readable string.
+
+        .NOTES
+        By Andreas Dieckmann - https://diecknet.de
+        Timezone IDs according to https://docs.microsoft.com/en-us/dotnet/api/microsoft.sharepoint.spregionalsettings.timezones?view=sharepoint-server#Microsoft_SharePoint_SPRegionalSettings_TimeZones
+
+        Licensed under MIT License
+        Copyright 2021 Andreas Dieckmann
+
+        Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+        The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+        .EXAMPLE
+        Convert-SPOTimezoneToString 14
+        (UTC-09:00) Alaska
+
+        .LINK
+        https://diecknet.de/en/2021/07/09/Sharepoint-Online-Timezones-by-PowerShell/
+        #>
+
+        $timezoneIDs = @{
+            39  = "(UTC-12:00) International Date Line West"
+            95  = "(UTC-11:00) Coordinated Universal Time-11"
+            15  = "(UTC-10:00) Hawaii"
+            14  = "(UTC-09:00) Alaska"
+            78  = "(UTC-08:00) Baja California"
+            13  = "(UTC-08:00) Pacific Time (US and Canada)"
+            38  = "(UTC-07:00) Arizona"
+            77  = "(UTC-07:00) Chihuahua, La Paz, Mazatlan"
+            12  = "(UTC-07:00) Mountain Time (US and Canada)"
+            55  = "(UTC-06:00) Central America"
+            11  = "(UTC-06:00) Central Time (US and Canada)"
+            37  = "(UTC-06:00) Guadalajara, Mexico City, Monterrey"
+            36  = "(UTC-06:00) Saskatchewan"
+            35  = "(UTC-05:00) Bogota, Lima, Quito"
+            10  = "(UTC-05:00) Eastern Time (US and Canada)"
+            34  = "(UTC-05:00) Indiana (East)"
+            88  = "(UTC-04:30) Caracas"
+            91  = "(UTC-04:00) Asuncion"
+            9   = "(UTC-04:00) Atlantic Time (Canada)"
+            81  = "(UTC-04:00) Cuiaba"
+            33  = "(UTC-04:00) Georgetown, La Paz, Manaus, San Juan"
+            28  = "(UTC-03:30) Newfoundland"
+            8   = "(UTC-03:00) Brasilia"
+            85  = "(UTC-03:00) Buenos Aires"
+            32  = "(UTC-03:00) Cayenne, Fortaleza"
+            60  = "(UTC-03:00) Greenland"
+            90  = "(UTC-03:00) Montevideo"
+            103 = "(UTC-03:00) Salvador"
+            65  = "(UTC-03:00) Santiago"
+            96  = "(UTC-02:00) Coordinated Universal Time-02"
+            30  = "(UTC-02:00) Mid-Atlantic"
+            29  = "(UTC-01:00) Azores"
+            53  = "(UTC-01:00) Cabo Verde"
+            86  = "(UTC) Casablanca"
+            93  = "(UTC) Coordinated Universal Time"
+            2   = "(UTC) Dublin, Edinburgh, Lisbon, London"
+            31  = "(UTC) Monrovia, Reykjavik"
+            4   = "(UTC+01:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna"
+            6   = "(UTC+01:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague"
+            3   = "(UTC+01:00) Brussels, Copenhagen, Madrid, Paris"
+            57  = "(UTC+01:00) Sarajevo, Skopje, Warsaw, Zagreb"
+            69  = "(UTC+01:00) West Central Africa"
+            83  = "(UTC+01:00) Windhoek"
+            79  = "(UTC+02:00) Amman"
+            5   = "(UTC+02:00) Athens, Bucharest, Istanbul"
+            80  = "(UTC+02:00) Beirut"
+            49  = "(UTC+02:00) Cairo"
+            98  = "(UTC+02:00) Damascus"
+            50  = "(UTC+02:00) Harare, Pretoria"
+            59  = "(UTC+02:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius"
+            101 = "(UTC+02:00) Istanbul"
+            27  = "(UTC+02:00) Jerusalem"
+            7   = "(UTC+02:00) Minsk (old)"
+            104 = "(UTC+02:00) E. Europe"
+            100 = "(UTC+02:00) Kaliningrad (RTZ 1)"
+            26  = "(UTC+03:00) Baghdad"
+            74  = "(UTC+03:00) Kuwait, Riyadh"
+            109 = "(UTC+03:00) Minsk"
+            51  = "(UTC+03:00) Moscow, St. Petersburg, Volgograd (RTZ 2)"
+            56  = "(UTC+03:00) Nairobi"
+            25  = "(UTC+03:30) Tehran"
+            24  = "(UTC+04:00) Abu Dhabi, Muscat"
+            54  = "(UTC+04:00) Baku"
+            106 = "(UTC+04:00) Izhevsk, Samara (RTZ 3)"
+            89  = "(UTC+04:00) Port Louis"
+            82  = "(UTC+04:00) Tbilisi"
+            84  = "(UTC+04:00) Yerevan"
+            48  = "(UTC+04:30) Kabul"
+            58  = "(UTC+05:00) Ekaterinburg (RTZ 4)"
+            87  = "(UTC+05:00) Islamabad, Karachi"
+            47  = "(UTC+05:00) Tashkent"
+            23  = "(UTC+05:30) Chennai, Kolkata, Mumbai, New Delhi"
+            66  = "(UTC+05:30) Sri Jayawardenepura"
+            62  = "(UTC+05:45) Kathmandu"
+            71  = "(UTC+06:00) Astana"
+            102 = "(UTC+06:00) Dhaka"
+            46  = "(UTC+06:00) Novosibirsk (RTZ 5)"
+            61  = "(UTC+06:30) Yangon (Rangoon)"
+            22  = "(UTC+07:00) Bangkok, Hanoi, Jakarta"
+            64  = "(UTC+07:00) Krasnoyarsk (RTZ 6)"
+            45  = "(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi"
+            63  = "(UTC+08:00) Irkutsk (RTZ 7)"
+            21  = "(UTC+08:00) Kuala Lumpur, Singapore"
+            73  = "(UTC+08:00) Perth"
+            75  = "(UTC+08:00) Taipei"
+            94  = "(UTC+08:00) Ulaanbaatar"
+            20  = "(UTC+09:00) Osaka, Sapporo, Tokyo"
+            72  = "(UTC+09:00) Seoul"
+            70  = "(UTC+09:00) Yakutsk (RTZ 8)"
+            19  = "(UTC+09:30) Adelaide"
+            44  = "(UTC+09:30) Darwin"
+            18  = "(UTC+10:00) Brisbane"
+            76  = "(UTC+10:00) Canberra, Melbourne, Sydney"
+            43  = "(UTC+10:00) Guam, Port Moresby"
+            42  = "(UTC+10:00) Hobart"
+            99  = "(UTC+10:00) Magadan"
+            68  = "(UTC+10:00) Vladivostok, Magadan (RTZ 9)"
+            107 = "(UTC+11:00) Chokurdakh (RTZ 10)"
+            41  = "(UTC+11:00) Solomon Is., New Caledonia"
+            108 = "(UTC+12:00) Anadyr, Petropavlovsk-Kamchatsky (RTZ 11)"
+            17  = "(UTC+12:00) Auckland, Wellington"
+            97  = "(UTC+12:00) Coordinated Universal Time+12"
+            40  = "(UTC+12:00) Fiji"
+            92  = "(UTC+12:00) Petropavlovsk-Kamchatsky - Old"
+            67  = "(UTC+13:00) Nuku'alofa"
+            16  = "(UTC+13:00) Samoa"
+        }
+
+        $timezoneString = $timezoneIDs.Get_Item($ID)
+
+        if ($null -ne $timezoneString) {
+            return $timezoneString
+        }
+        else {
+            return $ID
+        }
+    }   
 
     if (-not(Get-Module AzureADPreview -ListAvailable)) {
         Write-Warning "To use Office 365 groupes template, you must install AzureADPreview. Please run:
@@ -54,66 +206,69 @@ Function Get-SPOSitesDetails {
         return $teamEnabled
     }
 
-
     # Define a new object to gather output
     [System.Collections.Generic.List[PSObject]]$spoSitesInfos = @()
 
     Write-Verbose 'Get SharePoint Online sites Details'
     if ($ExcludeOneDrive) {
         $spoSites = Get-SPOSite -Limit All -IncludePersonalSite $false
-
     }
     else {
         $spoSites = Get-SPOSite -Limit All -IncludePersonalSite $true
     }
 
-    $directorySettings = (Get-AzureADDirectorySetting).Values
-    if (-not($directorySettings)) {
-        Write-Warning 'Unable to get AzureADDirectorySetting (default?)'
+    if ($OnlyOneDrive) {
+        $spoSites = $spoSites | Where-Object { $_.Url -like '*-my.sharepoint.com/personal/*' }
     }
-    else {
-        $groupCreation = ($directorySettings | Where-Object { $_.Name -eq 'EnableGroupCreation' }).Value
-        $groupCreationAllowedGroupId = ($directorySettings | Where-Object { $_.Name -eq 'GroupCreationAllowedGroupId' }).Value
-        $allowToAddGuest = ($directorySettings | Where-Object { $_.Name -eq "AllowToAddGuests" }).Value
-        $allowGuestsToAccessGroups = ($directorySettings | Where-Object { $_.Name -eq "AllowGuestsToAccessGroups" }).Value
-        $allowGuestsToBeGroupOwner = ($directorySettings | Where-Object { $_.Name -eq "AllowGuestsToBeGroupOwner" }).Value
 
-        if ($groupCreation) {
-            if ($groupCreationAllowedGroupId) {
-                Write-Host 'Office 365 Groups (or Teams) creation only allows for :'
-                Get-AzureADGroup -ObjectID $groupCreationAllowedGroupId
-            }
-            else	{
-                Write-Warning 'Office 365 Groups (or Teams) creation only allows for all Office 365 users.'
-            }
+    if ($M365GroupsDetails) {
+        $directorySettings = (Get-AzureADDirectorySetting).Values
+        if (-not($directorySettings)) {
+            Write-Warning 'Unable to get AzureADDirectorySetting (default?)'
         }
         else {
-            Write-Host 'Office 365 Groups (or Teams) creation disabled.'
-        }
+            $groupCreation = ($directorySettings | Where-Object { $_.Name -eq 'EnableGroupCreation' }).Value
+            $groupCreationAllowedGroupId = ($directorySettings | Where-Object { $_.Name -eq "GroupCreationAllowedGroupId" }).Value
+            $allowToAddGuest = ($directorySettings | Where-Object { $_.Name -eq "AllowToAddGuests" }).Value
+            $allowGuestsToAccessGroups = ($directorySettings | Where-Object { $_.Name -eq "AllowGuestsToAccessGroups" }).Value
+            $allowGuestsToBeGroupOwner = ($directorySettings | Where-Object { $_.Name -eq "AllowGuestsToBeGroupOwner" }).Value
 
-        if ($allowToAddGuest) {
-            Write-Warning "Guest are enabled:
+            if ($groupCreation) {
+                if ($groupCreationAllowedGroupId) {
+                    Write-Host 'Office 365 Groups (or Teams) creation only allows for :'
+                    Get-AzureADGroup -ObjectID $groupCreationAllowedGroupId
+                }
+                else	{
+                    Write-Warning 'Office 365 Groups (or Teams) creation only allows for all Office 365 users.'
+                }
+            }
+            else {
+                Write-Host 'Office 365 Groups (or Teams) creation disabled.'
+            }
+
+            if ($allowToAddGuest) {
+                Write-Warning "Guest are enabled:
 	    `n`t Guest can be group owner : $allowGuestsToBeGroupOwner
 	    `n`t Guest can acces to group: $allowGuestsToAccessGroups"
+            }
+            else {
+                Write-Host "Guest are disabled."
+            }
         }
-        else {
-            Write-Host "Guest are disabled."
-        }
-
     }
-
 
     # TOdo create hashtable pour aller plus vite
+    if ($M365GroupsDetails) {
 
-    $allO365Groups = Get-UnifiedGroup -ResultSize Unlimited
-    $hash = @{}
+        $allO365Groups = Get-UnifiedGroup -ResultSize Unlimited
+        $hash = @{}
 
-    $allO365Groups | ForEach-Object {
-        if ($_.SharePointSiteUrl -and $_.ExternalDirectoryObjectId) {
-            $hash.Add($_.SharePointSiteUrl, $_.ExternalDirectoryObjectId)
+        $allO365Groups | ForEach-Object {
+            if ($_.SharePointSiteUrl -and $_.ExternalDirectoryObjectId) {
+                $hash.Add($_.SharePointSiteUrl, $_.ExternalDirectoryObjectId)
+            }
         }
     }
-
 
     Write-Verbose "SharePoint Online sites Count is $($spoSites.count)"
 
@@ -126,9 +281,12 @@ Function Get-SPOSitesDetails {
         # Init variables    
         $ChannelCount = $TeamUsers = $TeamOwnerCount = $TeamMemberCount = $TeamGuestCount = $visibility = $archived = $groupID = $url = $siteOwner = $membersCount = $sharing = $sharingAllowedDomain = $sharingBlockedDomain = 'NULL'
         $owners = $ownersCount = $membersCount = $guestsCount = 'NULL'
+        $regionalSettings = $null
 
-        $teamsEnabled = $isO365Group = $false
-    
+        if ($M365GroupsDetails) {
+            $teamsEnabled = $isO365Group = $false
+        }
+
         $url = $object.Url
 
         if ($object.SharingAllowedDomainList) {
@@ -139,80 +297,97 @@ Function Get-SPOSitesDetails {
             $sharingBlockedDomain = $object.SharingBlockedDomainList
         }
 
-        # Check if Office 365 group
-        if ($object.template -eq 'GROUP#0') {
-            # https://office365itpros.com/2019/08/15/reporting-group-enabled-sharepoint-online-sites/
-            # do not working anymore because -detailed deprecated and not return groupID
-            #$groupID = (Get-SpoSite $object.Url -Detailed).GroupId.Guid
+        if ($M365GroupsDetails) {
 
-            $groupID = $hash[$object.url]
-            #        (Get-UnifiedGroup | Where-Object {$_.SharePointSiteUrl -eq $object.url}).ExternalDirectoryObjectId
+            # Check if Office 365 group
+            if ($object.template -eq 'GROUP#0') {
+                # https://office365itpros.com/2019/08/15/reporting-group-enabled-sharepoint-online-sites/
+                # do not working anymore because -detailed deprecated and not return groupID
+                #$groupID = (Get-SpoSite $object.Url -Detailed).GroupId.Guid
+
+                $groupID = $hash[$object.url]
+                #        (Get-UnifiedGroup | Where-Object {$_.SharePointSiteUrl -eq $object.url}).ExternalDirectoryObjectId
         
-            # Check if the Office 365 Group exists
-            if ($groupID) {
-                $membersCount = $O365Group.GroupMemberCount
+                # Check if the Office 365 Group exists
+                if ($groupID) {
+                    $membersCount = $O365Group.GroupMemberCount
             
-                # Check if Office 365 group has a team
-                try {
-                    $team = Get-Team -GroupId $GroupId
-                    $teamsEnabled = $true
-                }
-                catch {
-                    $teamsEnabled = $False
-                }
-			
-                if ($teamsEnabled) {		
-                    try {				
-                        #Get channel details
-                        $Channels = $null
-
-                        $Channels = Get-TeamChannel -GroupId $groupId
-                        $ChannelCount = $Channels.count
-			
-                        # Get Owners, members and guests
-
-                        $TeamUsers = Get-TeamUser -GroupId $groupId
-
-                        $owners = ($TeamUsers | Where-Object { $_.Role -like 'owner' }).User -join '|'
-                        $ownersCount = ($TeamUsers | Where-Object { $_.Role -like 'owner' }).count
-                    
-
-                        $membersCount = ($TeamUsers | Where-Object { $_.Role -like 'member' }).count
-                        $guestsCount = ($TeamUsers | Where-Object { $_.Role -like 'guest' }).count
-                        $visibility = $object.Visibility
-                        $archived = $object.Archived
+                    # Check if Office 365 group has a team
+                    try {
+                        $team = Get-Team -GroupId $GroupId
+                        $teamsEnabled = $true
                     }
                     catch {
+                        $teamsEnabled = $False
+                    }
 			
+                    if ($teamsEnabled) {		
+                        try {				
+                            #Get channel details
+                            $Channels = $null
+
+                            $Channels = Get-TeamChannel -GroupId $groupId
+                            $ChannelCount = $Channels.count
+			
+                            # Get Owners, members and guests
+
+                            $TeamUsers = Get-TeamUser -GroupId $groupId
+
+                            $owners = ($TeamUsers | Where-Object { $_.Role -like 'owner' }).User -join '|'
+                            $ownersCount = ($TeamUsers | Where-Object { $_.Role -like 'owner' }).count
+                    
+
+                            $membersCount = ($TeamUsers | Where-Object { $_.Role -like 'member' }).count
+                            $guestsCount = ($TeamUsers | Where-Object { $_.Role -like 'guest' }).count
+                            $visibility = $object.Visibility
+                            $archived = $object.Archived
+                        }
+                        catch {
+			
+                        }
                     }
                 }
             }
         }
 
-        # Put all details into an object
+        $regionalSettings = (Get-SPOSiteScriptFromWeb -WebUrl $sposite.url -IncludeRegionalSettings | ConvertFrom-Json).actions
+        $lang = [globalization.cultureinfo][int]$sposite.localeid
 
-        $object = [pscustomobject][ordered] @{
-            Title                   = $spoSite.Title
-            Url                     = $object.Url
-            Description             = $object.Description
-            GroupID                 = $groupId
-            IsMicrosoftTeam         = $teamsEnabled
-            Visibility              = $visibility
-            Archived                = $archived
-            StorageLimit            = (($spoSite.StorageQuota) / 1024).ToString("N")
-            StorageUsed             = (($spoSite.StorageUsageCurrent) / 1024).ToString("N")
-            Owner                   = $spoSite.Owner
-            SharingCapability       = $spoSite.SharingCapability
-            SharingAllowedDomain    = $spoSite.SharingAllowedDomainList
-            LockState               = $spoSite.LockState
-            Template                = $spoSite.Template
-            ConditionalAccessPolicy = $spoSite.ConditionalAccessPolicy
-            ChannelCount            = $ChannelCount
-            Owners                  = $owners
-            OwnersCount             = $ownersCount
-            MembersCount            = $membersCount
-            GuestsCount             = $guestsCount    
+        # Put all details into an object
+        $params = [ordered] @{
+            Title                        = $spoSite.Title
+            GroupID                      = $groupId
+            Url                          = $object.Url
+            Description                  = $object.Description
+            StorageLimit                 = (($spoSite.StorageQuota) / 1024).ToString("N")
+            StorageUsed                  = (($spoSite.StorageUsageCurrent) / 1024).ToString("N")
+            Owner                        = $spoSite.Owner
+            SharingCapability            = $spoSite.SharingCapability
+            SharingAllowedDomain         = $spoSite.SharingAllowedDomainList
+            SiteDefinedSharingCapability = $spoSite.SiteDefinedSharingCapability
+            LockState                    = $spoSite.LockState
+            LocaleID                     = $spoSite.LocaleID
+            LocaleIDString               = "$($lang.Name)|$($lang.DisplayName)"
+            Timezone                     = $regionalSettings.timeZone
+            TimezoneString               = Convert-SPOTimezoneToString $regionalSettings.timeZone
+            HourFormat                   = $regionalSettings.hourFormat
+            SortOrder                    = $regionalSettings.sortOrder
+            Template                     = $spoSite.Template
+            ConditionalAccessPolicy      = $spoSite.ConditionalAccessPolicy  
         }
+
+        if ($M365GroupsDetails) {
+            $params.Add('Visibility', $visibility)
+            $params.Add('Archived', $archived)
+            $params.Add('IsMicrosoftTeam', $teamsEnabled)
+            $params.Add('ChannelCount', $ChannelCount)
+            $params.Add('Owners', $owners)
+            $params.Add('OwnersCount', $ownersCount)
+            $params.Add('MembersCount', $membersCount)
+            $params.Add('GuestsCount', $guestsCount)
+        }
+
+        $object = New-Object -Type PSObject -Property $params
 
         # owner
         #     LastContent  = $Site.LastContentModifiedDate
