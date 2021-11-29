@@ -4,7 +4,8 @@ Function Get-SPOSitesDetails {
     Param(
         [boolean]$ExcludeOneDrive,
         [boolean]$OnlyOneDrive,
-        [boolean]$M365GroupsDetails
+        [boolean]$M365GroupsDetails,
+        [string]$SiteURL
     )
 
     # https://diecknet.de/en/2021/07/09/Sharepoint-Online-Timezones-by-PowerShell/
@@ -220,6 +221,9 @@ Function Get-SPOSitesDetails {
     if ($OnlyOneDrive) {
         $spoSites = $spoSites | Where-Object { $_.Url -like '*-my.sharepoint.com/personal/*' }
     }
+    elseif($siteurl) {
+        $spoSites = $spoSites | Where-Object { $_.Url -eq $siteurl }
+    }
 
     if ($M365GroupsDetails) {
         $directorySettings = (Get-AzureADDirectorySetting).Values
@@ -257,7 +261,6 @@ Function Get-SPOSitesDetails {
         }
     }
 
-    # TOdo create hashtable pour aller plus vite
     if ($M365GroupsDetails) {
 
         $allO365Groups = Get-UnifiedGroup -ResultSize Unlimited
