@@ -1,4 +1,4 @@
-
+# TODO : use LastItemUserModifiedDate but need to connect with ctx. or with PNP to each site
 Function Get-SPOSitesDetails {
     [CmdletBinding()]
     Param(
@@ -158,7 +158,7 @@ Function Get-SPOSitesDetails {
     }   
 
     if (-not(Get-Module AzureADPreview -ListAvailable)) {
-        Write-Warning "To use Office 365 groupes template, you must install AzureADPreview. Please run:
+        Write-Warning "To use Microsoft 365 groups template, you must install AzureADPreview. Please run:
 	Uninstall-Module AzureAD
 	Install-Module AzureADPreview
 	
@@ -184,29 +184,6 @@ Function Get-SPOSitesDetails {
         exit
     }
 
-    Function Get-TeamEnabled {
-        Param(
-            $Group
-        )
-	
-        $teamEnabled = $false
- 
-        try {
-            $group = Get-MailboxFolderStatistics -Identity $group.Alias -IncludeOldestAndNewestItems -FolderScope ConversationHistory | Select-Object FolderType
-        }
-        catch {
-	
-        }
-        if ($group.FolderType -eq 'TeamChat') {
-            $teamEnabled = $true
-        }
-        else {
-            $teamEnabled = $false
-        }
-	
-        return $teamEnabled
-    }
-
     # Define a new object to gather output
     [System.Collections.Generic.List[PSObject]]$spoSitesInfos = @()
 
@@ -221,7 +198,7 @@ Function Get-SPOSitesDetails {
     if ($OnlyOneDrive) {
         $spoSites = $spoSites | Where-Object { $_.Url -like '*-my.sharepoint.com/personal/*' }
     }
-    elseif($siteurl) {
+    elseif ($siteurl) {
         $spoSites = $spoSites | Where-Object { $_.Url -eq $siteurl }
     }
 
@@ -239,15 +216,15 @@ Function Get-SPOSitesDetails {
 
             if ($groupCreation) {
                 if ($groupCreationAllowedGroupId) {
-                    Write-Host 'Office 365 Groups (or Teams) creation only allows for :'
+                    Write-Host 'Microsoft 365 Groups (or Teams) creation only allows for :'
                     Get-AzureADGroup -ObjectID $groupCreationAllowedGroupId
                 }
-                else	{
-                    Write-Warning 'Office 365 Groups (or Teams) creation only allows for all Office 365 users.'
+                else {
+                    Write-Warning 'Microsoft 365 Groups (or Teams) creation only allows for all Microsoft 365 users.'
                 }
             }
             else {
-                Write-Host 'Office 365 Groups (or Teams) creation disabled.'
+                Write-Host 'Microsoft 365 Groups (or Teams) creation disabled.'
             }
 
             if ($allowToAddGuest) {
@@ -263,12 +240,18 @@ Function Get-SPOSitesDetails {
 
     if ($M365GroupsDetails) {
 
-        $allO365Groups = Get-UnifiedGroup -ResultSize Unlimited
+        $allM365Groups = Get-UnifiedGroup -ResultSize Unlimited
+        
         $hash = @{}
+        $hashWhenCreated = @{}
 
-        $allO365Groups | ForEach-Object {
-            if ($_.SharePointSiteUrl -and $_.ExternalDirectoryObjectId) {
-                $hash.Add($_.SharePointSiteUrl, $_.ExternalDirectoryObjectId)
+        $allM365Groups | ForEach-Object {
+            if ($_.SharePointSiteUrl -and $_.PrimarySmtpAddress) {
+                $hash.Add($_.SharePointSiteUrl, $_.PrimarySmtpAddress)
+                
+            }
+            if ($_.SharePointSiteUrl -and $_.WhenCreatedUTC) {
+                $hashWhenCreated.Add($_.SharePointSiteUrl, $_.WhenCreatedUTC)
             }
         }
     }
@@ -276,79 +259,87 @@ Function Get-SPOSitesDetails {
     Write-Verbose "SharePoint Online sites Count is $($spoSites.count)"
 
     foreach ($spoSite in $spoSites) {
-        Write-Verbose "Get details for SharePoint site $($object.Url)"
-
-        $object = $spoSite
+        Write-Verbose "Get details for SharePoint site $($spoSite.Url)"
     
         $groupID = $null
         # Init variables    
-        $ChannelCount = $TeamUsers = $TeamOwnerCount = $TeamMemberCount = $TeamGuestCount = $visibility = $archived = $groupID = $url = $siteOwner = $membersCount = $sharing = $sharingAllowedDomain = $sharingBlockedDomain = 'NULL'
-        $owners = $ownersCount = $membersCount = $guestsCount = 'NULL'
-        $regionalSettings = $null
+        $channelCount = $teamUsers = $TeamOwnerCount = $TeamMemberCount = $TeamGuestCount = $groupID = $siteOwner = $membersCount = $sharing = $sharingAllowedDomain = $sharingBlockedDomain = $groupID = 'NULL'
+        
+        $ChannelCount = $teamUsers = $owners = $ownersCount = $membersCount = $guestsCount = $visibility = $archived = $team = $null 
+        
+        $regionalSettings = $type = $null
 
         if ($M365GroupsDetails) {
-            $teamsEnabled = $isO365Group = $false
+            $teamsEnabled = $isM365Group = $false
         }
 
-        $url = $object.Url
-
-        if ($object.SharingAllowedDomainList) {
-            $sharingAllowedDomain = $object.SharingAllowedDomainList
+        if ($spoSite.SharingAllowedDomainList) {
+            $sharingAllowedDomain = $spoSite.SharingAllowedDomainList -join '|'
         }
     
-        if ($object.SharingBlockedDomainList) {
-            $sharingBlockedDomain = $object.SharingBlockedDomainList
+        if ($spoSite.SharingBlockedDomainList) {
+            $sharingBlockedDomain = $spoSite.SharingBlockedDomainList -join '|'
         }
 
         if ($M365GroupsDetails) {
+            $groupID = $sposite.RelatedGroupId.Guid
 
-            # Check if Office 365 group
-            if ($object.template -eq 'GROUP#0') {
+            if ($groupID -eq '00000000-0000-0000-0000-000000000000') {
+                $type = 'SharePoint Site'
+            }
+            
+            # Check if Microsoft 365 group
+            elseif ($sposite.template -eq 'GROUP#0') {
                 # https://office365itpros.com/2019/08/15/reporting-group-enabled-sharepoint-online-sites/
                 # do not working anymore because -detailed deprecated and not return groupID
-                #$groupID = (Get-SpoSite $object.Url -Detailed).GroupId.Guid
+                #$groupID = (Get-SpoSite $spoSite.Url -Detailed).GroupId.Guid
 
-                $groupID = $hash[$object.url]
-                #        (Get-UnifiedGroup | Where-Object {$_.SharePointSiteUrl -eq $object.url}).ExternalDirectoryObjectId
+                #$groupID = $hash[$sposite.url][0]
+                # $groupID = $sposite.RelatedGroupId.Guid
+
+                # (Get-UnifiedGroup | Where-Object {$_.SharePointSiteUrl -eq $spoSite.url}).ExternalDirectoryObjectId
         
-                # Check if the Office 365 Group exists
-                if ($groupID) {
-                    $membersCount = $O365Group.GroupMemberCount
-            
-                    # Check if Office 365 group has a team
+                # Check if the Microsoft 365 Group exists
+                if ($null -ne $hash[$sposite.url]) {
+                    $membersCount = $M365Group.GroupMemberCount
+                    $type = 'M365 Group'
+
+                    # Check if Microsoft 365 group has a team
                     try {
-                        $team = Get-Team -GroupId $GroupId
+                        $team = Get-Team -GroupId $GroupId -ErrorAction Stop
                         $teamsEnabled = $true
                     }
                     catch {
                         $teamsEnabled = $False
                     }
 			
-                    if ($teamsEnabled) {		
-                        try {				
+                    if ($teamsEnabled) {
+                        try {
                             #Get channel details
-                            $Channels = $null
+                            $channels = $null
 
-                            $Channels = Get-TeamChannel -GroupId $groupId
-                            $ChannelCount = $Channels.count
-			
+                            $channels = Get-TeamChannel -GroupId $groupId
+                            $ChannelCount = $channels.count
+
                             # Get Owners, members and guests
 
-                            $TeamUsers = Get-TeamUser -GroupId $groupId
+                            $teamUsers = Get-TeamUser -GroupId $groupId
 
-                            $owners = ($TeamUsers | Where-Object { $_.Role -like 'owner' }).User -join '|'
-                            $ownersCount = ($TeamUsers | Where-Object { $_.Role -like 'owner' }).count
-                    
+                            $owners = ($teamUsers | Where-Object { $_.Role -like 'owner' }).User -join '|'
+                            $ownersCount = ($teamUsers | Where-Object { $_.Role -like 'owner' }).count
 
-                            $membersCount = ($TeamUsers | Where-Object { $_.Role -like 'member' }).count
-                            $guestsCount = ($TeamUsers | Where-Object { $_.Role -like 'guest' }).count
-                            $visibility = $object.Visibility
-                            $archived = $object.Archived
+                            $membersCount = ($teamUsers | Where-Object { $_.Role -like 'member' }).count
+                            $guestsCount = ($teamUsers | Where-Object { $_.Role -like 'guest' }).count
+                            $visibility = $team.Visibility
+                            $archived = $team.Archived
                         }
                         catch {
-			
+
                         }
                     }
+                }
+                else {
+                    $type = 'M365 group but not connected (?)'
                 }
             }
         }
@@ -358,43 +349,56 @@ Function Get-SPOSitesDetails {
 
         # Put all details into an object
         $params = [ordered] @{
-            Title                        = $spoSite.Title
-            GroupID                      = $groupId
-            Url                          = $object.Url
-            Description                  = $object.Description
-            StorageLimit                 = (($spoSite.StorageQuota) / 1024).ToString("N")
-            StorageUsed                  = (($spoSite.StorageUsageCurrent) / 1024).ToString("N")
-            Owner                        = $spoSite.Owner
-            SharingCapability            = $spoSite.SharingCapability
-            SharingAllowedDomain         = $spoSite.SharingAllowedDomainList
-            SiteDefinedSharingCapability = $spoSite.SiteDefinedSharingCapability
-            LockState                    = $spoSite.LockState
-            LocaleID                     = $spoSite.LocaleID
-            LocaleIDString               = "$($lang.Name)|$($lang.DisplayName)"
-            Timezone                     = $regionalSettings.timeZone
-            TimezoneString               = Convert-SPOTimezoneToString $regionalSettings.timeZone
-            HourFormat                   = $regionalSettings.hourFormat
-            SortOrder                    = $regionalSettings.sortOrder
-            Template                     = $spoSite.Template
-            ConditionalAccessPolicy      = $spoSite.ConditionalAccessPolicy  
+            SPTitle                                     = $spoSite.Title
+            GroupID                                     = $groupId
+            Url                                         = $spoSite.Url
+            StorageLimit                                = (($spoSite.StorageQuota) / 1024)
+            StorageUsed                                 = (($spoSite.StorageUsageCurrent) / 1024)
+            Owner                                       = $spoSite.Owner
+            SharingCapability                           = $spoSite.SharingCapability
+            SharingAllowedDomain                        = $spoSite.SharingAllowedDomainList
+            SiteDefinedSharingCapability                = $spoSite.SiteDefinedSharingCapability
+            LockState                                   = $spoSite.LockState
+            LocaleID                                    = $spoSite.LocaleID
+            LocaleIDString                              = "$($lang.Name)|$($lang.DisplayName)"
+            Timezone                                    = $regionalSettings.timeZone
+            TimezoneString                              = Convert-SPOTimezoneToString $regionalSettings.timeZone
+            HourFormat                                  = $regionalSettings.hourFormat
+            SortOrder                                   = $regionalSettings.sortOrder
+            Template                                    = $spoSite.Template
+            ConditionalAccessPolicy                     = $spoSite.ConditionalAccessPolicy
+            LastContentModifiedDate                     = $sposite.LastContentModifiedDate
+            IsTeamsConnected                            = $sposite.IsTeamsConnected
+            IsTeamsChannelConnected                     = $sposite.IsTeamsChannelConnected
+            SensitivityLabel                            = $sposite.SensitivityLabel
+            DefaultLinkPermission                       = $sposite.DefaultLinkPermission
+            DefaultSharingLinkType                      = $sposite.DefaultSharingLinkType
+            DefaultLinkToExistingAccess                 = $sposite.DefaultLinkToExistingAccess
+            AnonymousLinkExpirationInDays               = $sposite.AnonymousLinkExpirationInDays
+            OverrideTenantAnonymousLinkExpirationPolicy = $sposite.OverrideTenantAnonymousLinkExpirationPolicy
+            ExternalUserExpirationInDays                = $sposite.ExternalUserExpirationInDays
+            OverrideTenantExternalUserExpirationPolicy  = $sposite.OverrideTenantExternalUserExpirationPolicy
+            IsHubSite                                   = $sposite.IsHubSite
         }
 
+        # If Teams renamed, the DisplayName is not the same as the Title of the SPOsite
         if ($M365GroupsDetails) {
-            $params.Add('Visibility', $visibility)
-            $params.Add('Archived', $archived)
-            $params.Add('IsMicrosoftTeam', $teamsEnabled)
-            $params.Add('ChannelCount', $ChannelCount)
-            $params.Add('Owners', $owners)
-            $params.Add('OwnersCount', $ownersCount)
-            $params.Add('MembersCount', $membersCount)
-            $params.Add('GuestsCount', $guestsCount)
+            $primarySMTPAddress = $hash[$spoSite.Url]
+            $params.Add('PrimarySmtpAddress', $primarySMTPAddress)
+            $params.Add('Type', $type)
+            $params.Add('M365DisplayName', $team.DisplayName)
+            $params.Add('M365WhenCreatedUTC', $hashWhenCreated[$spoSite.Url])
+            $params.Add('TeamDescription', $team.Description)
+            $params.Add('TeamVisibility', $visibility)
+            $params.Add('TeamArchived', $archived)
+            $params.Add('TeamChannelCount', $ChannelCount)
+            $params.Add('TeamOwners', $owners)
+            $params.Add('TeamOwnersCount', $ownersCount)
+            $params.Add('TeamMembersCount', $membersCount)
+            $params.Add('TeamGuestsCount', $guestsCount)
         }
 
         $object = New-Object -Type PSObject -Property $params
-
-        # owner
-        #     LastContent  = $Site.LastContentModifiedDate
-        # manque lacces externe
 
         $spoSitesInfos.Add($object)
     }

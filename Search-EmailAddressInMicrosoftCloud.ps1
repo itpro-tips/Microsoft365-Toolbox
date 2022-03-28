@@ -3,14 +3,15 @@
 function Search-EmailAddressInMicrosoftCloud {
     [CmdletBinding()]
     Param(
-        [string[]]$SearchEmails
+        [string[]]$SearchEmails,
+		[string[]]$SearchByDomain
     )
 
     function AddtoHashTable {
         Param
         (
-            $hashtable,
-            $users
+            $HashTable,
+            $Users
         )
         foreach ($user in $users) {
             foreach ($emailaddress in $user.emailaddresses) {
@@ -20,6 +21,12 @@ function Search-EmailAddressInMicrosoftCloud {
                 $emailaddress = $emailaddress -replace 'sip:', ''
                 $emailaddress = $emailaddress -replace 'spo:', ''
 
+				if($SearchByDomain) {
+					if($emailaddress -notlike "*$SearchByDomain") {
+						continue
+					}
+				}
+				
                 if (-not($allO365EmailAddressesHashTable.ContainsKey($emailaddress))) {
                     $allO365EmailAddressesHashTable.add($emailaddress, ($emailaddress + '|' + $user.objectID + '|' + $user.DisplayName + '|' + $user.RecipientTypeDetails))
                 }
@@ -73,16 +80,13 @@ function Search-EmailAddressInMicrosoftCloud {
         Connect-MsolService
     }
 
-    $allO365EmailAddressesHashTable = @{ }
+    $allO365EmailAddressesHashTable = @{}
 
     ###### Exchange Online infrastructure
     Write-Host 'Get All Exchange Online recipients...' -ForegroundColor Green
     $allExchangeRecipients = Get-Recipient * -ResultSize unlimited | Select-Object DisplayName, RecipientTypeDetails, EmailAddresses, @{Name = 'objectID'; Expression = { $_.ExternalDirectoryObjectId } }
     Write-Host 'Get All SoftDeletedMailbox...' -ForegroundColor Green
-    $SoftDeleted = Get-Mailbox * -SoftDeletedMailbox -ResultSize unlimited | Select-Object DisplayName, RecipientTypeDetails, EmailAddresses, @{Name = 'objectID'; Expression = { $_.ExternalDirectoryObjectId } }
-
-    # Useless because Get-Recipient returns Office 365 groups
-    # $UnifiedGroups = Get-UnifiedGroup -ResultSize unlimited
+    $SoftDeleted = Get-Mailbox -SoftDeletedMailbox -ResultSize unlimited | Select-Object DisplayName, RecipientTypeDetails, EmailAddresses, @{Name = 'objectID'; Expression = { $_.ExternalDirectoryObjectId } }
 
     ##### Azure Active Directory infrastructure
     Write-Host 'Get All Office 365 users...' -ForegroundColor Green
@@ -90,7 +94,6 @@ function Search-EmailAddressInMicrosoftCloud {
     # Office 365 users - UPN name
     # Same thing but with UPN because sometimes the UPN is not the same as the SMTP proxyaddresses
     $Office365Users = Get-MsolUser -All
-
 
     $Office365UPNUsers = $Office365Users | Select-Object DisplayName, objectID, @{Name = 'EmailAddresses'; Expression = { $_.UserPrincipalName } }, @{Name = 'RecipientTypeDetails'; Expression = { if ($_.UserType -eq 'Member' -or $null -eq $_.UserType) { 'Office365User' } else { 'GuestUser' } } }
     $Office365EmailAddresses = $Office365Users | Select-Object DisplayName, objectID, @{Name = 'EmailAddresses'; Expression = { $_.ProxyAddresses } }, @{Name = 'RecipientTypeDetails'; Expression = { if ($_.UserType -eq 'Member') { 'Office365User' }else { 'GuestUser' } } }
@@ -100,21 +103,20 @@ function Search-EmailAddressInMicrosoftCloud {
 
     $Office365DeletedUsers = Get-MsolUser -ReturnDeletedUsers -All
 
-
     $Office365DeletedUsersUPN = $Office365DeletedUsers | Select-Object DisplayName, objectID, @{Name = 'EmailAddresses'; Expression = { $_.UserPrincipalName } }, @{Name = 'RecipientTypeDetails'; Expression = { if ($_.UserType -eq 'Member') { 'DeletedOffice365User' }else { 'DeletedGuestUser' } } }
     $Office365DeletedUsersEmailAddresses = $Office365DeletedUsers | Select-Object DisplayName, objectID, @{Name = 'EmailAddresses'; Expression = { $_.ProxyAddresses } }, @{Name = 'RecipientTypeDetails'; Expression = { if ($_.UserType -eq 'Member') { 'DeletedOffice365User' }else { 'DeletedGuestUser' } } }
 
     # Creating hashtable
     Write-Host 'Creating HashTable...' -ForegroundColor Green
-    AddtoHashTable -hashtable $allO365EmailAddressesHashTable -users $allExchangeRecipients
-    AddtoHashTable -hashtable $allO365EmailAddressesHashTable -users $SoftDeleted
+    AddtoHashTable -HashTable $allO365EmailAddressesHashTable -Users $allExchangeRecipients
+    AddtoHashTable -HashTable $allO365EmailAddressesHashTable -Users $SoftDeleted
 
-    AddtoHashTable -hashtable $allO365EmailAddressesHashTable -users $Office365UPNUsers 
-    AddtoHashTable -hashtable $allO365EmailAddressesHashTable -users $Office365EmailAddresses
-    AddtoHashTable -hashtable $allO365EmailAddressesHashTable -users $Office365AlternateEmailAddresses
+    AddtoHashTable -HashTable $allO365EmailAddressesHashTable -Users $Office365UPNUsers 
+    AddtoHashTable -HashTable $allO365EmailAddressesHashTable -Users $Office365EmailAddresses
+    AddtoHashTable -HashTable $allO365EmailAddressesHashTable -Users $Office365AlternateEmailAddresses
 
-    AddtoHashTable -hashtable $allO365EmailAddressesHashTable -users $Office365DeletedUsersUPN 
-    AddtoHashTable -hashtable $allO365EmailAddressesHashTable -users $Office365DeletedUsersEmailAddresses
+    AddtoHashTable -HashTable $allO365EmailAddressesHashTable -Users $Office365DeletedUsersUPN 
+    AddtoHashTable -HashTable $allO365EmailAddressesHashTable -Users $Office365DeletedUsersEmailAddresses
 
     if ($SearchEmails) {
         foreach ($SearchEmail in $SearchEmails) {
