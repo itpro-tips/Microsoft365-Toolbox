@@ -30,6 +30,7 @@ For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 
 Version history:
 V1.0, 17 august 2020 - Initial version
+V1.1, 05 april 2022 - Add alternate email, Phone number, PIN
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
@@ -76,28 +77,38 @@ function Get-MsolRoleReport {
                 break
             }
         }
-
-        Write-Host -ForegroundColor green "Role $($msolRole.Name) - " -NoNewline
         
         try {
 
             $roleMembers = Get-MsolRoleMember -RoleObjectId $msolRole.ObjectId
-            
-            Write-Host -ForegroundColor green "Member(s) found: $($roleMembers.count)"
+
+            # Add green color if member found into the role
+            if ($roleMembers.count -gt 0) {
+                Write-Host -ForegroundColor Green "Role $($msolRole.Name) - Member(s) found: $($roleMembers.count)"
+            }
+            else {
+                Write-Host -ForegroundColor Cyan "Role $($msolRole.Name) - Member found: $($roleMembers.count)"
+            }
 
             if ($IncludeEmptyRoles -and $roleMembers.count -eq 0) {
                 $object = [PSCustomObject] [ordered]@{
-                    'Role'                    = $msolRole.Name
-                    'RoleDescription'         = $msolRole.Description
-                    'MemberDisplayName'       = '-'
-                    'MemberUserPrincipalName' = '-'
-                    'MemberEmail'             = '-'
-                    'MemberAlternateEmail'    = '-'
-                    'RoleMemberType'          = '-'
-                    'MemberAccountEnabled'    = '-'
-                    'MemberLastDirSyncTime'   = '-'
-                    'MemberMFAState'          = '-'
-                    'MemberObjectID'          = '-'
+                    'Role'                                    = $msolRole.Name
+                    'RoleDescription'                         = $msolRole.Description
+                    'MemberDisplayName'                       = '-'
+                    'MemberUserPrincipalName'                 = '-'
+                    'MemberEmail'                             = '-'
+                    'MemberAlternateEmailAddresses'           = '-'
+                    'RoleMemberType'                          = '-'
+                    'MemberAccountEnabled'                    = '-'
+                    'MemberLastDirSyncTime'                   = '-'
+                    'MemberMFAState'                          = '-'
+                    'MemberObjectID'                          = '-'
+                    'MemberStrongAuthNEmail'                  = '-'
+                    'MemberStrongAuthNPin'                    = '-'
+                    'MemberStrongAuthNOldPin'                 = '-'
+                    'MemberStrongAuthNPhoneNumber'            = '-'
+                    'MemberStrongAuthNAlternativePhoneNumber' = '-'
+                    'Recommendations'                         = '-'
                 }
                 
                 $rolesMembership.Add($object)
@@ -111,18 +122,23 @@ function Get-MsolRoleReport {
                 # Select only the first if user already exists in multiple roles
                 if ($rolesMembership.MemberObjectID -contains $roleMember.ObjectID) {
                     $found = $rolesMembership | Where-Object { $_.MemberObjectID -eq $roleMember.ObjectID } | Select-Object -First 1
-                    $object = [PSCustomObject] [ordered]@{
-                        'Role'                    = $msolRole.Name
-                        'RoleDescription'         = $msolRole.Description
-                        'MemberDisplayName'       = $found.MemberDisplayName
-                        'MemberUserPrincipalName' = $found.MemberUserPrincipalName
-                        'MemberEmail'             = $found.MemberEmail
-                        'MemberAlternateEmail'    = $found.MemberAlternateEmail
-                        'RoleMemberType'          = $found.RoleMemberType
-                        'MemberAccountEnabled'    = $found.MemberAccountEnabled
-                        'MemberLastDirSyncTime'   = $found.MemberLastDirSyncTime
-                        'MemberMFAState'          = $found.MemberMFAState
-                        'MemberObjectID'          = $found.MemberObjectID
+                    $object = [PSCustomObject][ordered]@{
+                        'Role'                                    = $msolRole.Name
+                        'RoleDescription'                         = $msolRole.Description
+                        'MemberDisplayName'                       = $found.MemberDisplayName
+                        'MemberUserPrincipalName'                 = $found.MemberUserPrincipalName
+                        'MemberEmail'                             = $found.MemberEmail
+                        'MemberAlternateEmailAddresses'           = $found.MemberAlternateEmailAddresses
+                        'RoleMemberType'                          = $found.RoleMemberType
+                        'MemberAccountEnabled'                    = $found.MemberAccountEnabled
+                        'MemberLastDirSyncTime'                   = $found.MemberLastDirSyncTime
+                        'MemberMFAState'                          = $found.MemberMFAState
+                        'MemberObjectID'                          = $found.MemberObjectID
+                        'MemberStrongAuthNEmail'                  = $found.MemberStrongAuthNEmail
+                        'MemberStrongAuthNPin'                    = $found.MemberStrongAuthNPin
+                        'MemberStrongAuthNOldPin'                 = $found.MemberStrongAuthNOldPin
+                        'MemberStrongAuthNPhoneNumber'            = $found.MemberStrongAuthNPhoneNumber
+                        'MemberStrongAuthNAlternativePhoneNumber' = $found.MemberStrongAuthNAlternativePhoneNumber
                     }
                 }
                 else {
@@ -131,9 +147,8 @@ function Get-MsolRoleReport {
                     }
                     # Sometimes, user is service account, not present in Office 365. We set ErrorAction SilentlyContinue to prevent error. not handle non user type
                     else {
-                        $member = Get-MsolUser -objectid $roleMember.ObjectID -ErrorAction SilentlyContinue
+                        $member = Get-MsolUser -ObjectId $roleMember.ObjectID -ErrorAction SilentlyContinue
                     }
-                    
                     
                     $MFAState = $member.StrongAuthenticationRequirements.State
                     
@@ -149,17 +164,45 @@ function Get-MsolRoleReport {
                     }
 
                     $object = [PSCustomObject] [ordered]@{
-                        'Role'                    = $msolRole.Name
-                        'RoleDescription'         = $msolRole.Description
-                        'MemberDisplayName'       = $roleMember.DisplayName
-                        'MemberUserPrincipalName' = $member.UserPrincipalName
-                        'MemberEmail'             = $roleMember.EmailAddress
-                        'MemberAlternateEmail'    = $member.AlternateEmailAddresses | ForEach-Object { $_ -join '|' }
-                        'RoleMemberType'          = $roleMember.RoleMemberType
-                        'MemberAccountEnabled'    = -not $member.AccountEnabled # BlockCredential is the opposite 
-                        'MemberLastDirSyncTime'   = $lastDirSyncTime
-                        'MemberMFAState'          = $MFAState
-                        'MemberObjectID'          = $member.ObjectId
+                        'Role'                                    = $msolRole.Name
+                        'RoleDescription'                         = $msolRole.Description
+                        'MemberDisplayName'                       = $roleMember.DisplayName
+                        'MemberUserPrincipalName'                 = $member.UserPrincipalName
+                        'MemberEmail'                             = $roleMember.EmailAddress
+                        'MemberAlternateEmailAddresses'           = if (($member.AlternateEmailAddresses.count -eq 0)) { '-' } else { $member.AlternateEmailAddresses -join '|' }
+                        'RoleMemberType'                          = $roleMember.RoleMemberType
+                        'MemberAccountEnabled'                    = -not $member.AccountEnabled # BlockCredential is the opposite 
+                        'MemberLastDirSyncTime'                   = $lastDirSyncTime
+                        'MemberMFAState'                          = $MFAState
+                        'MemberObjectID'                          = $member.ObjectId
+                        'MemberStrongAuthNEmail'                  = if ($null -eq $member.StrongAuthenticationUserDetails.Email) { '-' } else { $member.StrongAuthenticationUserDetails.Email }
+                        'MemberStrongAuthNPin'                    = if ($null -eq $member.StrongAuthenticationUserDetails.Pin) { '-' } else { $member.StrongAuthenticationUserDetails.Pin }
+                        'MemberStrongAuthNOldPin'                 = if ($null -eq $member.StrongAuthenticationUserDetails.OldPin) { '-' } else { $member.StrongAuthenticationUserDetails.OldPin }
+                        'MemberStrongAuthNPhoneNumber'            = if ($null -eq $member.StrongAuthenticationUserDetails.PhoneNumber) { '-' } else { $member.StrongAuthenticationUserDetails.PhoneNumber }
+                        'MemberStrongAuthNAlternativePhoneNumber' = if ($null -eq $member.StrongAuthenticationUserDetails.AlternativePhoneNumber) { '-' } else { $member.StrongAuthenticationUserDetails.AlternativePhoneNumber }
+                        'Recommendations'                         = ''
+                    }
+
+                    $recommendationsString = $null
+
+                    if ($object.MemberAlternateEmailAddresses -ne '-') {
+                        $recommendationsString = "alternate email address (user profile in Azure AD portal) = $($object.MemberAlternateEmailAddresses);"
+                    } 
+
+                    if ($object.MemberStrongAuthNEmail -ne '-') {
+                        $recommendationsString += "authentication email (Authentication Methods in Azure AD portal) = $($object.MemberStrongAuthNEmail);"
+                    }   
+
+                    if ($object.MemberStrongAuthNPhoneNumber -ne '-') {
+                        $recommendationsString += "phone number = $($object.memberStrongAuthNPhoneNumber);"
+                    }   
+
+                    if ($object.MemberStrongAuthNAlternativePhoneNumber -ne '-') {
+                        $recommendationsString += "alternate phone number = $($object.MemberStrongAuthNAlternativePhoneNumber);"
+                    }   
+                    
+                    if ($null -ne $recommendationsString) {
+                        $object.Recommendations = "Be careful about this admin user. If someone access the following phone(s)/email(s), he can reset the user password: $recommendationsString"
                     }
                 }
 
