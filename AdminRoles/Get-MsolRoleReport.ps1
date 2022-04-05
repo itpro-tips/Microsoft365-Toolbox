@@ -97,12 +97,12 @@ function Get-MsolRoleReport {
                     'MemberDisplayName'                       = '-'
                     'MemberUserPrincipalName'                 = '-'
                     'MemberEmail'                             = '-'
-                    'MemberAlternateEmailAddresses'           = '-'
                     'RoleMemberType'                          = '-'
                     'MemberAccountEnabled'                    = '-'
                     'MemberLastDirSyncTime'                   = '-'
-                    'MemberMFAState'                          = '-'
+                    'MemberMFAState(IgnoreIfConditionalAccessIsUsed)' = '-'
                     'MemberObjectID'                          = '-'
+                    'MemberAlternateEmailAddresses'           = '-'
                     'MemberStrongAuthNEmail'                  = '-'
                     'MemberStrongAuthNPin'                    = '-'
                     'MemberStrongAuthNOldPin'                 = '-'
@@ -128,17 +128,18 @@ function Get-MsolRoleReport {
                         'MemberDisplayName'                       = $found.MemberDisplayName
                         'MemberUserPrincipalName'                 = $found.MemberUserPrincipalName
                         'MemberEmail'                             = $found.MemberEmail
-                        'MemberAlternateEmailAddresses'           = $found.MemberAlternateEmailAddresses
                         'RoleMemberType'                          = $found.RoleMemberType
                         'MemberAccountEnabled'                    = $found.MemberAccountEnabled
                         'MemberLastDirSyncTime'                   = $found.MemberLastDirSyncTime
-                        'MemberMFAState'                          = $found.MemberMFAState
+                        'MemberMFAState(IgnoreIfConditionalAccessIsUsed)'= $found.'MemberMFAState(IgnoreIfConditionalAccessIsUsed)'
                         'MemberObjectID'                          = $found.MemberObjectID
+                        'MemberAlternateEmailAddresses'           = $found.MemberAlternateEmailAddresses
                         'MemberStrongAuthNEmail'                  = $found.MemberStrongAuthNEmail
                         'MemberStrongAuthNPin'                    = $found.MemberStrongAuthNPin
                         'MemberStrongAuthNOldPin'                 = $found.MemberStrongAuthNOldPin
                         'MemberStrongAuthNPhoneNumber'            = $found.MemberStrongAuthNPhoneNumber
                         'MemberStrongAuthNAlternativePhoneNumber' = $found.MemberStrongAuthNAlternativePhoneNumber
+                        'Recommendations'                         = $found.Recommendations
                     }
                 }
                 else {
@@ -169,12 +170,12 @@ function Get-MsolRoleReport {
                         'MemberDisplayName'                       = $roleMember.DisplayName
                         'MemberUserPrincipalName'                 = $member.UserPrincipalName
                         'MemberEmail'                             = $roleMember.EmailAddress
-                        'MemberAlternateEmailAddresses'           = if (($member.AlternateEmailAddresses.count -eq 0)) { '-' } else { $member.AlternateEmailAddresses -join '|' }
                         'RoleMemberType'                          = $roleMember.RoleMemberType
                         'MemberAccountEnabled'                    = -not $member.AccountEnabled # BlockCredential is the opposite 
                         'MemberLastDirSyncTime'                   = $lastDirSyncTime
-                        'MemberMFAState'                          = $MFAState
+                        'MemberMFAState(IgnoreIfConditionalAccessIsUsed)' = $MFAState
                         'MemberObjectID'                          = $member.ObjectId
+                        'MemberAlternateEmailAddresses'           = if (($member.AlternateEmailAddresses.count -eq 0)) { '-' } else { $member.AlternateEmailAddresses -join '|' }
                         'MemberStrongAuthNEmail'                  = if ($null -eq $member.StrongAuthenticationUserDetails.Email) { '-' } else { $member.StrongAuthenticationUserDetails.Email }
                         'MemberStrongAuthNPin'                    = if ($null -eq $member.StrongAuthenticationUserDetails.Pin) { '-' } else { $member.StrongAuthenticationUserDetails.Pin }
                         'MemberStrongAuthNOldPin'                 = if ($null -eq $member.StrongAuthenticationUserDetails.OldPin) { '-' } else { $member.StrongAuthenticationUserDetails.OldPin }
@@ -194,7 +195,7 @@ function Get-MsolRoleReport {
                     }   
 
                     if ($object.MemberStrongAuthNPhoneNumber -ne '-') {
-                        $recommendationsString += "phone number = $($object.memberStrongAuthNPhoneNumber);"
+                        $recommendationsString += "phone number = $($object.MemberStrongAuthNPhoneNumber);"
                     }   
 
                     if ($object.MemberStrongAuthNAlternativePhoneNumber -ne '-') {
