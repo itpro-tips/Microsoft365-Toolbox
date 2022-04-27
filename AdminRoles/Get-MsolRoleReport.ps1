@@ -25,12 +25,22 @@ https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes
 https://github.com/itpro-tips/Microsoft365-Toolbox/blob/master/AdminRoles/Get-MsolRoleReport.ps1
 
 .NOTES
-Written by Bastien Perez (ITPro-Tips.com)
+Written by Bastien Perez (Clidsys.com - ITPro-Tips.com)
 For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 
 Version history:
 V1.0, 17 august 2020 - Initial version
 V1.1, 05 april 2022 - Add alternate email, Phone number, PIN
+V1.2, 27/04/2022 april 2022 - Add GroupNameUsedInConditionnalAccess to check if user is member of group used in conditionnal access
+
+/!\
+/!\
+/!\
+CAREFUL, THIS SCRIPT CAN STOP WORKING AFTER DECEMBER 2022 DUE TO MICROSOFT DELETION OF MSOL AND AZURE AD MODULES
+https://office365itpros.com/2022/03/17/azure-ad-powershell-deprecation/
+/!\
+/!\
+/!\
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
@@ -40,12 +50,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER 
 DEALINGS IN THE SOFTWARE.
 
-TODO: Switch to Microsoft Graph
 #>
 function Get-MsolRoleReport {
     [CmdletBinding()]
     param (
-        [boolean]$IncludeEmptyRoles
+        [boolean]$IncludeEmptyRoles,
+        [String]$GroupNameUsedInConditionnalAccess
     )
 
     try {
@@ -66,7 +76,7 @@ function Get-MsolRoleReport {
 
     # Use MsolService because returns more role and allows MFA status 
     
-    $rolesMembership = New-Object 'System.Collections.Generic.List[System.Object]'
+    $rolesMembers = New-Object 'System.Collections.Generic.List[System.Object]'
 
     foreach ($msolRole in $msolRoles) {
 
@@ -102,6 +112,7 @@ function Get-MsolRoleReport {
                     'MemberAccountEnabled'                            = '-'
                     'MemberLastDirSyncTime'                           = '-'
                     'MemberMFAState(IgnoreIfConditionalAccessIsUsed)' = '-'
+                    'MemberStrongAuthNDefaultMethodType'              = '-'   
                     'MemberObjectID'                                  = '-'
                     'MemberAlternateEmailAddresses'                   = '-'
                     'MemberStrongAuthNEmail'                          = '-'
@@ -112,15 +123,15 @@ function Get-MsolRoleReport {
                     'Recommendations'                                 = '-'
                 }
 
-                $rolesMembership.Add($object)
+                $rolesMembers.Add($object)
 
             }
             else {
                 foreach ($roleMember in $roleMembers) {                
                     # if user already exist in the arraylist, we look for to prevent a new Get-MsolUser (time consuming)
                     # Select only the first if user already exists in multiple roles
-                    if ($rolesMembership.MemberObjectID -contains $roleMember.ObjectID) {
-                        $found = $rolesMembership | Where-Object { $_.MemberObjectID -eq $roleMember.ObjectID } | Select-Object -First 1
+                    if ($rolesMembers.MemberObjectID -contains $roleMember.ObjectID) {
+                        $found = $rolesMembers | Where-Object { $_.MemberObjectID -eq $roleMember.ObjectID } | Select-Object -First 1
                         $object = [PSCustomObject][ordered]@{
                             'Role'                                            = $msolRole.Name
                             'RoleDescription'                                 = $msolRole.Description
@@ -131,6 +142,7 @@ function Get-MsolRoleReport {
                             'MemberAccountEnabled'                            = $found.MemberAccountEnabled
                             'MemberLastDirSyncTime'                           = $found.MemberLastDirSyncTime
                             'MemberMFAState(IgnoreIfConditionalAccessIsUsed)' = $found.'MemberMFAState(IgnoreIfConditionalAccessIsUsed)'
+                            'MemberStrongAuthNDefaultMethodType'              = $found.MemberStrongAuthNDefaultMethodType
                             'MemberObjectID'                                  = $found.MemberObjectID
                             'MemberAlternateEmailAddresses'                   = $found.MemberAlternateEmailAddresses
                             'MemberStrongAuthNEmail'                          = $found.MemberStrongAuthNEmail
@@ -173,6 +185,7 @@ function Get-MsolRoleReport {
                             'MemberAccountEnabled'                            = -not $member.AccountEnabled # BlockCredential is the opposite 
                             'MemberLastDirSyncTime'                           = $lastDirSyncTime
                             'MemberMFAState(IgnoreIfConditionalAccessIsUsed)' = $MFAState
+                            'MemberStrongAuthNDefaultMethodType'              = if ($null -eq ($member.StrongAuthenticationMethods | Where-Object { $_.IsDefault -eq $true }).MethodType) { '-' } else { ($member.StrongAuthenticationMethods | Where-Object { $_.IsDefault -eq $true }).MethodType }
                             'MemberObjectID'                                  = $member.ObjectId
                             'MemberAlternateEmailAddresses'                   = if (($member.AlternateEmailAddresses.count -eq 0)) { '-' } else { $member.AlternateEmailAddresses -join '|' }
                             'MemberStrongAuthNEmail'                          = if ($null -eq $member.StrongAuthenticationUserDetails.Email) { '-' } else { $member.StrongAuthenticationUserDetails.Email }
@@ -206,14 +219,38 @@ function Get-MsolRoleReport {
                         }
                     }
 
-                    $rolesMembership.Add($object)
+                    $rolesMembers.Add($object)
                 }
             }
         }
         catch {
             Write-Warning $_.Exception.Message
         }
+
     }
     
-    return $rolesMembership
+    if ($GroupNameUsedInConditionnalAccess) {
+
+        $tempRolesMembers = New-Object 'System.Collections.Generic.List[System.Object]'
+
+        $msolGroup = Get-MsolGroup -SearchString $GroupNameUsedInConditionnalAccess
+        $msolGroupMembers = Get-MsolGroupMember -GroupObjectId $msolGroup.ObjectID
+
+        foreach ($roleMember in $rolesMembers) {
+            $isMember = $false
+
+            if ($msolGroupMembers.ObjectId -contains $roleMember.MemberObjectID) {
+                $isMember = $true
+            }
+
+            $roleMember | Add-Member -MemberType NoteProperty -Name MemberOfGroupUsedByConditionnalAccess -Value $isMember
+
+            $tempRolesMembers.Add($roleMember)
+        }
+
+        $rolesMembers = $tempRolesMembers        
+
+    }
+
+    return $rolesMembers
 }
