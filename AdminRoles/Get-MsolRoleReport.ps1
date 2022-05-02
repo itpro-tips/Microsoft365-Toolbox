@@ -229,6 +229,29 @@ function Get-MsolRoleReport {
 
     }
     
+    $object = [PSCustomObject] [ordered]@{
+        'Role'                                            = 'Partners'
+        'RoleDescription'                                 = 'Partners'
+        'MemberDisplayName'                               = 'Partners'
+        'MemberUserPrincipalName'                         = 'Partners'
+        'MemberEmail'                                     = 'Partners'
+        'RoleMemberType'                                  = 'Partners'
+        'MemberAccountEnabled'                            = 'Partners'
+        'MemberLastDirSyncTime'                           = 'Partners'
+        'MemberMFAState(IgnoreIfConditionalAccessIsUsed)' = 'Partners'
+        'MemberStrongAuthNDefaultMethodType'              = 'Partners'
+        'MemberObjectID'                                  = 'Partners'
+        'MemberAlternateEmailAddresses'                   = 'Partners'
+        'MemberStrongAuthNEmail'                          = 'Partners'
+        'MemberStrongAuthNPin'                            = 'Partners'
+        'MemberStrongAuthNOldPin'                         = 'Partners'
+        'MemberStrongAuthNPhoneNumber'                    = 'Partners'
+        'MemberStrongAuthNAlternativePhoneNumber'         = 'Partners'
+        'Recommendations'                                 = 'Please check this URL to identify if you have partner with admin roles https://admin.microsoft.com/AdminPortal/Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
+    }
+
+    $rolesMembers.Add($object)
+    
     if ($GroupNameUsedInConditionnalAccess) {
 
         $tempRolesMembers = New-Object 'System.Collections.Generic.List[System.Object]'
