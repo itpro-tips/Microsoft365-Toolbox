@@ -31,7 +31,8 @@ For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 Version history:
 V1.0, 17 august 2020 - Initial version
 V1.1, 05 april 2022 - Add alternate email, Phone number, PIN
-V1.2, 27/04/2022 april 2022 - Add GroupNameUsedInConditionnalAccess to check if user is member of group used in conditionnal access
+V1.2, 27 april april 2022 - Add GroupNameUsedInConditionnalAccess to check if user is member of group used in conditionnal access
+V1.3, 2 may 2022 - Add Partners links
 
 /!\
 /!\
@@ -251,7 +252,7 @@ function Get-MsolRoleReport {
     }
 
     $rolesMembers.Add($object)
-    
+
     if ($GroupNameUsedInConditionnalAccess) {
 
         $tempRolesMembers = New-Object 'System.Collections.Generic.List[System.Object]'
