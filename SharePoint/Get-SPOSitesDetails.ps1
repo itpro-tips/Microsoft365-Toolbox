@@ -167,21 +167,21 @@ Function Get-SPOSitesDetails {
 	Install-Module AzureAD
 	"
 	
-        exit
+        return
     }
 
     if (-not(Get-Module MicrosoftTeams -ListAvailable)) {
         Write-Warning "Please install MicrosoftTeams PowerShell module:
 	Install-Module MicrosoftTeams
 	"
-        exit
+        return
     }
 
     if (-not(Get-Module Microsoft.Online.SharePoint.PowerShell -ListAvailable)) {
         Write-Warning "Please install SharePoint Online PowerShell module:
 	http://www.microsoft.com/en-us/download/details.aspx?id=35588
 	"
-        exit
+        return
     }
 
     # Define a new object to gather output

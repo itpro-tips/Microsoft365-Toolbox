@@ -49,7 +49,7 @@ function Search-AdminRolesChanges {
 	}
 	catch {
 		Write-Warning 'First, install the official Microsoft Exchange Online Management module : Install-Module ExchangeOnlineManagement'
-		exit
+		return
 	}
 
 	try {
@@ -63,7 +63,7 @@ function Search-AdminRolesChanges {
 		}
 		catch {
 			Write-Warning 'Unable to connect to Exchange Online'
-			exit
+			return
 		}
 	}
 	
@@ -90,7 +90,7 @@ function Search-AdminRolesChanges {
 	}
 	catch {
 		Write-Warning "Unable to gather information $($_.Exception.Message)"
-		exit
+		return
 	}
 
 	if ($records.Count -eq 0) {
