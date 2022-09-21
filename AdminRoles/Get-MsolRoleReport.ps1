@@ -76,8 +76,7 @@ function Get-MsolRoleReport {
     }
 
     # Use MsolService because returns more role and allows MFA status 
-    
-    $rolesMembers = New-Object 'System.Collections.Generic.List[System.Object]'
+    [System.Collections.Generic.List[PSObject]]$rolesMembers = @()
 
     foreach ($msolRole in $msolRoles) {
 
