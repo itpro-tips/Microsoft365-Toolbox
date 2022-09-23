@@ -2,7 +2,7 @@
 # Priority 2: forwardingSMTPAddress
 # Priority 3: inbox rule
 
-Function Get-MailForward {
+Function Get-MailboxForwarding {
 
 	[CmdletBinding()] 
 	Param 
@@ -34,31 +34,35 @@ Function Get-MailForward {
 		
 		$autoForwardMode = $outboundSpamPolicy.AutoForwardingMode
 		
-		Write-Host "Careful if value is 'Automatic'. It means the autoForward will be block even if the Remote domain(s) are configured with AutoForwardEnable = `$true
+		if ($autoForwardMode -eq 'Automatic') {
+			Write-Host "Careful, the value 'Automatic is now the same as AutoForwardEnable=Off, means autoForward is even if the Remote domain(s) are configured with AutoForwardEnable = `$true
 		Sources:
 		https://office365itpros.com/2020/11/12/microsoft-clamps-down-mail-forwarding-exchange-online/
 		http://blog.icewolf.ch/archive/2020/10/06/how-to-control-the-many-ways-of-email-forwarding-in.aspx
+		https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/external-email-forwarding?view=o365-worldwide
+		https://techcommunity.microsoft.com/t5/exchange-team-blog/all-you-need-to-know-about-automatic-email-forwarding-in/ba-p/2074888
+	
 		RoadMap ID: MC221113" -ForeGround Yellow
+		}
 	}
 
 	$hashRecipients = @{ }
 	
-	Write-Host -ForegroundColor green 'Gathering Exchange recipients'
-	#recipients = Get-Recipient -ResultSize Unlimited 
+	Write-Host -ForegroundColor cyan 'Get Exchange recipients'
 	$recipients = Get-EXORecipient -ResultSize Unlimited
 
 	$recipients | ForEach-Object {
 		$hashRecipients.Add($_.Name, $_.PrimarySmtpAddress)
 	}
 
-	$mailboxeslist = New-Object 'System.Collections.Generic.List[System.Object]'
+	[System.Collections.Generic.List[PSObject]]$mailboxesList = @()
 
-	Write-Host -ForegroundColor green 'Gathering mailboxes'
+	Write-Host -ForegroundColor cyan 'Get mailboxes'
 	if ($null -ne $Mailboxes -and $Mailboxes.Count -gt 0) {
 		foreach ($mbx in $Mailboxes) {
 			try {
 				$mailbox = Get-EXOMailbox -Identity $mbx -ErrorAction Stop
-				$null = $mailboxeslist.Add($mailbox)
+				$null = $mailboxesList.Add($mailbox)
 			}
 			catch {
 				Write-Warning "$user mailbox not found. $($_.Exception.Message)"
@@ -67,14 +71,14 @@ Function Get-MailForward {
 	}
 	else {
 		try {
-			$mailboxeslist = Get-Mailbox * -ResultSize Unlimited -ErrorAction Stop | Sort-Object Name
+			$mailboxesList = Get-Mailbox * -ResultSize Unlimited -ErrorAction Stop | Sort-Object Name
 		}
 		catch {
 			Write-Warning "Mailbox not found. $($_.Exception.Message)"
 		}
 	}
 	
-	Write-Host -ForegroundColor green 'Get Accepted Domain in Exchange Online to identify internal/external forward'
+	Write-Host -ForegroundColor cyan 'Get Accepted Domain in Exchange Online to identify internal/external forward'
 	$domains = (Get-AcceptedDomain).Name
 
 	# To prevent, block via rule and via OWA policy
@@ -85,7 +89,7 @@ Function Get-MailForward {
 
 	# Identify mailbox with DistinguishedName to prevent issue in case of alias/name duplicate
 	<#
-	$mbxWithForward = $mailboxeslist | Where-Object { ($null -ne $_.ForwardingSMTPAddress) -or ($null -ne $_.ForwardingAddress) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { (Get-Recipient -Identity "$($_.ForwardingAddress)").PrimarySmtpAddress } } }, DeliverToMailboxAndForward
+	$mbxWithForward = $mailboxesList | Where-Object { ($null -ne $_.ForwardingSMTPAddress) -or ($null -ne $_.ForwardingAddress) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { (Get-Recipient -Identity "$($_.ForwardingAddress)").PrimarySmtpAddress } } }, DeliverToMailboxAndForward
 	
 	if ($null -ne $mbxWithForward) {
 		Write-Host -ForegroundColor Yellow "ForwardingAddress and ForwardingSMTP Address found"
@@ -99,7 +103,7 @@ Function Get-MailForward {
 	$mailboxesWithForward = New-Object 'System.Collections.Generic.List[System.Object]'
 
 	if (-not($InboxRulesOnly)) {
-		foreach ($mailbox in $mailboxeslist) {
+		foreach ($mailbox in $mailboxesList) {
 			Write-Host -ForegroundColor cyan "Processing ForwardingAddress|ForwardingSMTPAddress - $($mailbox.Name) - $($mailbox.PrimarySMTPAddress)"
 			#$forward = $mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress) -or ($null -ne $_.ForwardingAddress) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward
 
@@ -214,9 +218,9 @@ Function Get-MailForward {
 	#$mailboxesWithInboxForward = New-Object 'System.Collections.Generic.List[System.Object]'
 	$i = 0
 	if (-not($ForwardingAndForwardingSMTPOnly)) {
-		foreach ($mailbox in $mailboxeslist) {
+		foreach ($mailbox in $mailboxesList) {
 			$i++
-			Write-Host -ForegroundColor cyan "Processing Inbox rules - $($mailbox.Name) - $($mailbox.PrimarySMTPAddress) [$i/$($mailboxeslist.count)]"
+			Write-Host -ForegroundColor cyan "Processing Inbox rules - $($mailbox.Name) - $($mailbox.PrimarySMTPAddress) [$i/$($mailboxesList.count)]"
 
 			$mailboxInboxForwardRules = Get-InboxRule -Mailbox "$($mailbox.DistinguishedName)" | Where-Object { ($null -ne $_.ForwardTo) -or ($null -ne $_.ForwardAsAttachmentTo) -or ($null -ne $_.RedirectTo) -or ($_.SendTextMessageNotificationTo.count -gt 0) } | Select-Object Identity, Enabled, ForwardTo, ForwardAsAttachmentTo, RedirectTo, SendTextMessageNotificationTo, Description, Priority
 			
