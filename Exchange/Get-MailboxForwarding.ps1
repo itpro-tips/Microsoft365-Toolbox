@@ -3,7 +3,8 @@
 # Priority 3: inbox rule
 
 # TODO:
-# Add forwarWorks for inbox rules
+# Add forwardWorks for inbox rules
+# Add forwardWorks if RemoteDomain enable
 Function Get-MailboxForwarding {
 
 	[CmdletBinding()] 
@@ -123,14 +124,16 @@ Function Get-MailboxForwarding {
 			if ($null -ne $forwardingAddress) {  
 				Write-Host -ForegroundColor yellow "$($mailbox.Name) - $($mailbox.PrimarySMTPAddress) - 1 forwardingAddress parameter found"
 
-				if ($internalDomains -match $forwardingAddress.ForwardingAddressConverted.Split('@')[1] -and $autoForwardMode) {
-					$forwardingWorks = "True (autoForward mode = $autoForwardMode)"
+				$recipientDomain = $forwardingAddress.ForwardingAddressConverted.Split('@')[1]
+				
+				if ($internalDomains -match $recipientDomain) {
+					$forwardingWorks = "True ($recipientDomain = internalDomain)"
 				}
 				elseif ($autoForwardMode -eq 'Automatic' -or $autoForwardMode -eq 'Off') {
-					$forwardingWorks = "False (autoForward mode = $autoForwardMode)" 
+					$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
 				}
 				else {
-					$forwardingWorks = "True (autoForward mode = $autoForwardMode)"
+					$forwardingWorks = "Maybe (Autoforward mode = $autoForwardMode), check RemoteDomain"
 				}
 
 				$object = [PSCustomObject][ordered]@{
@@ -183,14 +186,16 @@ Function Get-MailboxForwarding {
 					$precedence = '-'
 				}
 
-				if ($internalDomains -match $forwardingSMTPAddress.forwardingSMTPAddress.Split('@')[1] -and $autoForwardMode) {
-					$forwardingWorks = "True (autoForward mode = $autoForwardMode)"
+				$recipientDomain = $forwardingSMTPAddress.forwardingSMTPAddress.Split('@')[1]
+
+				if ($internalDomains -match $recipientDomain) {
+					$forwardingWorks = "True ($recipientDomain = internalDomain)"
 				}
 				elseif ($autoForwardMode -eq 'Automatic' -or $autoForwardMode -eq 'Off') {
-					$forwardingWorks = "False (autoForward mode = $autoForwardMode)" 
+					$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
 				}
 				else {
-					$forwardingWorks = "True (autoForward mode = $autoForwardMode)"
+					$forwardingWorks = "Maybe (Autoforward mode = $autoForwardMode), check RemoteDomain"
 				}
 
 				$object = [PSCustomObject][ordered]@{
@@ -244,13 +249,13 @@ Function Get-MailboxForwarding {
 
 						<#
 						if ($internalDomains -match $forwardingSMTPAddress.forwardingSMTPAddress.Split('@')[1] -and $autoForwardMode) {
-							$forwardingWorks = "True (autoForward mode = $autoForwardMode)"
+							$forwardingWorks = "True (Autoforward mode = $autoForwardMode)"
 						}
 						elseif ($autoForwardMode -eq 'Automatic' -or $autoForwardMode -eq 'Off') {
-							$forwardingWorks = "False (autoForward mode = $autoForwardMode)" 
+							$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
 						}
 						else {
-							$forwardingWorks = "True (autoForward mode = $autoForwardMode)"
+							$forwardingWorks = "True (Autoforward mode = $autoForwardMode)"
 						}
 						#>
 						$object = [PSCustomObject][ordered]@{
@@ -265,7 +270,7 @@ Function Get-MailboxForwarding {
 							ForwardingAddress                      = '-'
 							ForwardingAddressConverted             = '-'
 							ForwardingSMTPAddress                  = '-'
-							ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled)'
+							ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
 							DeliverToMailboxAndForward             = '-'
 							InboxRulePriority                      = $mailboxInboxForwardRule.Priority
 							InboxRuleEnabled                       = $mailboxInboxForwardRule.Enabled
