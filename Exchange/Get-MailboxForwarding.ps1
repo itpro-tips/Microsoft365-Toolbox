@@ -2,9 +2,11 @@
 # Priority 2: forwardingSMTPAddress
 # Priority 3: inbox rule
 
+# Autoforward works if forwardingAddress because it's an internal object
 # TODO:
 # Add forwardWorks for inbox rules
 # Add forwardWorks if RemoteDomain enable
+
 Function Get-MailboxForwarding {
 
 	[CmdletBinding()] 
@@ -133,7 +135,7 @@ Function Get-MailboxForwarding {
 					$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
 				}
 				else {
-					$forwardingWorks = "Maybe (Autoforward mode = $autoForwardMode), check RemoteDomain"
+					$forwardingWorks = "Yes (Autoforward mode = $autoForwardMode) and address used is an internal object (contact maybe)"
 				}
 
 				$object = [PSCustomObject][ordered]@{
@@ -195,7 +197,7 @@ Function Get-MailboxForwarding {
 					$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
 				}
 				else {
-					$forwardingWorks = "Maybe (Autoforward mode = $autoForwardMode), check RemoteDomain"
+					$forwardingWorks = "Maybe (Autoforward mode = $autoForwardMode), check if RemoteDomain(s) allows external forwarding"
 				}
 
 				$object = [PSCustomObject][ordered]@{
