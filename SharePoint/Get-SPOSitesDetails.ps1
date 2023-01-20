@@ -1,3 +1,6 @@
+# Admin must be site admin to get all properties
+# Set-SPOUser -Site hxxx -LoginName xxx@xxx.onmicrosoft.com -IsSiteCollectionAdmin $true
+
 # TODO : use LastItemUserModifiedDate but need to connect with ctx. or with PNP to each site
 Function Get-SPOSitesDetails {
     [CmdletBinding()]
@@ -5,7 +8,9 @@ Function Get-SPOSitesDetails {
         [boolean]$ExcludeOneDrive,
         [boolean]$OnlyOneDrive,
         [boolean]$M365GroupsDetails,
-        [string]$SiteURL
+        [string]$SiteURL,
+        [boolean]$SharingRightsAdminOrFullControl,
+        [boolean]$regionalSettingsDetails
     )
 
     # https://diecknet.de/en/2021/07/09/Sharepoint-Online-Timezones-by-PowerShell/
@@ -188,20 +193,22 @@ Function Get-SPOSitesDetails {
     [System.Collections.Generic.List[PSObject]]$spoSitesInfos = @()
 
     Write-Verbose 'Get SharePoint Online sites Details'
-    if ($ExcludeOneDrive) {
-        $spoSites = Get-SPOSite -Limit All -IncludePersonalSite $false
+    if ($siteurl) {
+        $spoSites = Get-SPOSite -Identity $SiteURL
     }
     else {
-        $spoSites = Get-SPOSite -Limit All -IncludePersonalSite $true
+        if ($ExcludeOneDrive) {
+            $spoSites = Get-SPOSite -Limit All -IncludePersonalSite $false
+        }
+        else {
+            $spoSites = Get-SPOSite -Limit All -IncludePersonalSite $true
+        }
+    
+        if ($OnlyOneDrive) {
+            $spoSites = $spoSites | Where-Object { $_.Url -like '*-my.sharepoint.com/personal/*' }
+        }
     }
-
-    if ($OnlyOneDrive) {
-        $spoSites = $spoSites | Where-Object { $_.Url -like '*-my.sharepoint.com/personal/*' }
-    }
-    elseif ($siteurl) {
-        $spoSites = $spoSites | Where-Object { $_.Url -eq $siteurl }
-    }
-
+    
     if ($M365GroupsDetails) {
         $directorySettings = (Get-AzureADDirectorySetting).Values
         if (-not($directorySettings)) {
@@ -236,9 +243,6 @@ Function Get-SPOSitesDetails {
                 Write-Host "Guest are disabled."
             }
         }
-    }
-
-    if ($M365GroupsDetails) {
 
         $allM365Groups = Get-UnifiedGroup -ResultSize Unlimited
         
@@ -263,7 +267,7 @@ Function Get-SPOSitesDetails {
     
         $groupID = $null
         # Init variables    
-        $channelCount = $teamUsers = $TeamOwnerCount = $TeamMemberCount = $TeamGuestCount = $groupID = $siteOwner = $membersCount = $sharing = $sharingAllowedDomain = $sharingBlockedDomain = $groupID = 'NULL'
+        $channelCount = $teamUsers = $TeamOwnerCount = $TeamMemberCount = $TeamGuestCount = $groupID = $siteOwner = $membersCount = $sharing = $sharingAllowedDomain = $sharingBlockedDomain = $groupID = $spoSiteAdmins = 'NULL'
         
         $ChannelCount = $teamUsers = $owners = $ownersCount = $membersCount = $guestsCount = $visibility = $archived = $team = $null 
         
@@ -344,8 +348,30 @@ Function Get-SPOSitesDetails {
             }
         }
 
-        $regionalSettings = (Get-SPOSiteScriptFromWeb -WebUrl $sposite.url -IncludeRegionalSettings | ConvertFrom-Json).actions
-        $lang = [globalization.cultureinfo][int]$sposite.localeid
+        if ($regionalSettingsDetails) {
+            $regionalSettings = (Get-SPOSiteScriptFromWeb -WebUrl $sposite.url -IncludeRegionalSettings | ConvertFrom-Json).actions
+            $lang = [globalization.cultureinfo][int]$sposite.localeid
+        }
+        # spo site admins need to be found by user/ cast to arry to get .count
+        [array]$spoSiteAdmins = (Get-SPOUser -Site $spoSite.Url -Limit All | Where-Object { $_.IsSiteAdmin }).LoginName
+
+        # source: https://onedrive.live.com/?authkey=%21AOu1SovQbowVNPU&cid=0CAD1DAC2D5DF9C0&id=CAD1DAC2D5DF9C0%211321&parId=CAD1DAC2D5DF9C0%21113&o=OneUp
+        
+        #Get all Groups from the site permissions
+        if ($SharingRightsAdminOrFullControl) {
+            $sitegroups = Get-SPOSiteGroup -Site $spoSite.Url -Limit 99999
+    
+            #Get Group info and members that have site owners permissions
+            foreach ($sitegroup in $sitegroups) {
+                if ($role.Contains('Site Owner')) {
+                    $roleSiteOwner = $sitegroup.Users
+                } 
+            
+                if ($role.Contains('Full Control')) {
+                    $roleFullControl = $sitegroup.Users
+                }
+            }
+        }
 
         # Put all details into an object
         $params = [ordered] @{
@@ -355,6 +381,9 @@ Function Get-SPOSitesDetails {
             StorageLimit                                = (($spoSite.StorageQuota) / 1024)
             StorageUsed                                 = (($spoSite.StorageUsageCurrent) / 1024)
             Owner                                       = $spoSite.Owner
+            SiteAdmins                                  = $spoSiteAdmins -join '|'
+            SiteAdminsNumber                            = $spoSiteAdmins.count
+            SiteAdminsMessage                           = "Please check 'My Site Secondary Admin' too https://<tenant>-admin.sharepoint.com/_layouts/15/Online/PersonalSites.aspx?PersonalSitesOverridden=1"
             SharingCapability                           = $spoSite.SharingCapability
             SharingAllowedDomain                        = $spoSite.SharingAllowedDomainList
             SiteDefinedSharingCapability                = $spoSite.SiteDefinedSharingCapability
@@ -379,8 +408,10 @@ Function Get-SPOSitesDetails {
             ExternalUserExpirationInDays                = $sposite.ExternalUserExpirationInDays
             OverrideTenantExternalUserExpirationPolicy  = $sposite.OverrideTenantExternalUserExpirationPolicy
             IsHubSite                                   = $sposite.IsHubSite
+            RoleFullControl                             = $roleFullControl
+            RoleSiteOwner                               = $roleSiteOwner
         }
-
+        
         # If Teams renamed, the DisplayName is not the same as the Title of the SPOsite
         if ($M365GroupsDetails) {
             $primarySMTPAddress = $hash[$spoSite.Url]
