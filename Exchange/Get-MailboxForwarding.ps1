@@ -16,15 +16,19 @@ Function Get-MailboxForwarding {
 		[ValidateNotNullOrEmpty()] 
 		[string[]]$Mailboxes,
 		[Parameter(Mandatory = $false)] 
-		[boolean]$ForwardingAndForwardingSMTPOnly,
+		[switch]$ForwardingAndForwardingSMTPOnly,
 		[Parameter(Mandatory = $false)] 
-		[boolean]$InboxRulesOnly,
+		[switch]$InboxRulesOnly,
 		[Parameter(Mandatory = $false)] 
-		[boolean]$ExportResults
+		[switch]$ExportResults
 	)
 
-	$internalDomains = (Get-AcceptedDomain).domainName
+	[System.Collections.Generic.List[PSObject]]$mailboxesList = @()
+	[System.Collections.Generic.List[PSObject]]$forwardList = @()
 
+	Write-Host -ForegroundColor cyan 'Get Accepted Domain in Exchange Online to identify internal/external forward'
+	$internalDomains = (Get-AcceptedDomain).DomainName
+	
 	$remoteDomains = Get-RemoteDomain
 
 	foreach ($remoteDomain in $remoteDomains) {
@@ -60,32 +64,33 @@ Function Get-MailboxForwarding {
 		$hashRecipients.Add($_.Name, $_.PrimarySmtpAddress)
 	}
 
-	[System.Collections.Generic.List[PSObject]]$mailboxesList = @()
-
-	Write-Verbose 'Get mailboxes'
+	Write-Verbose 'Get all mailboxes'
+	# if mailboxes is specified, get only these mailboxes
 	if ($null -ne $Mailboxes -and $Mailboxes.Count -gt 0) {
 		foreach ($mbx in $Mailboxes) {
 			try {
 				$mailbox = Get-EXOMailbox -Identity $mbx -ErrorAction Stop
+				$mailbox = Get-EXOMailbox -Identity $mbx -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop
 				$mailboxesList.Add($mailbox)
 			}
 			catch {
-				Write-Warning "$user mailbox not found. $($_.Exception.Message)"
+				Write-Warning "$mbx mailbox not found. $($_.Exception.Message)"
 			}
 		}
 	}
+	# else get all mailboxes
 	else {
 		try {
-			$mailboxesList = Get-Mailbox * -ResultSize Unlimited -ErrorAction Stop | Sort-Object Name
+			# Get-EXOMailbox contains only a subset of properties by default. We need to add properties needed.
+			# Note: we can use -PropertySets Delivery
+			$mailboxesList = Get-EXOMailbox -ResultSize Unlimited -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop | Sort-Object Name
 		}
 		catch {
-			Write-Warning "Mailbox not found. $($_.Exception.Message)"
+			Write-Warning "Mailboxes not found. $($_.Exception.Message)"
+			return
 		}
 	}
 	
-	Write-Host -ForegroundColor cyan 'Get Accepted Domain in Exchange Online to identify internal/external forward'
-	$domains = (Get-AcceptedDomain).Name
-
 	# To prevent, block via rule and via OWA policy
 
 	# If user set forwardingSMTPaddress+deliverToMailboxAndForward is set AND forwardingAddress is also set. The Exchange Online CMDLet will tell us the deliverToMailboxAndForward is set... but no !
@@ -104,8 +109,6 @@ Function Get-MailboxForwarding {
 		Write-Host -ForegroundColor Green "SERVER SIDE (forwardingAddress and ForwardingSMTP Address) : No forward on server side"
 	}
 	#>
-	
-	[System.Collections.Generic.List[PSObject]]$forwardList = @()
 
 	if (-not($InboxRulesOnly)) {
 		foreach ($mailbox in $mailboxesList) {
@@ -120,15 +123,14 @@ Function Get-MailboxForwarding {
 			#>
 
 			$forwardingAddress = $mailbox | Where-Object { ($null -ne $_.ForwardingAddress) } | Select-Object Name, PrimarySmtpAddress, ForwardingAddress, @{Name = 'ForwardingAddressConverted'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward
-			#$forward = $mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress -and -not($domains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or ($null -ne $_.ForwardingAddress -and -not($domains -contains $hashRecipients[$_.ForwardingSMTPAddress].split('@')[1]) ) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward	
-
+			#$forward = $mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress -and -not($internalDomains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or ($null -ne $_.ForwardingAddress -and -not($internalDomains -contains $hashRecipients[$_.ForwardingSMTPAddress].split('@')[1]) ) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward	
 			
 			if ($null -ne $forwardingAddress) {  
 				Write-Host -ForegroundColor yellow "$($mailbox.Name) - $($mailbox.PrimarySMTPAddress) - 1 forwardingAddress parameter found"
 
 				$recipientDomain = $forwardingAddress.ForwardingAddressConverted.Split('@')[1]
 				
-				if ($internalDomains -match $recipientDomain) {
+				if ($internalDomains -contains $recipientDomain) {
 					$forwardingWorks = "True ($recipientDomain = internalDomain)"
 				}
 				elseif ($autoForwardMode -eq 'Automatic' -or $autoForwardMode -eq 'Off') {
@@ -154,6 +156,7 @@ Function Get-MailboxForwarding {
 					DeliverToMailboxAndForward             = '-'
 					InboxRulePriority                      = '-'
 					InboxRuleEnabled                       = '-'
+					InboxRuleForwardAddressConverted       = '-'
 					InboxRuleRedirectTo                    = '-'
 					InboxRuleForwardTo                     = '-'
 					InboxRuleForwardAsAttachmentTo         = '-'
@@ -176,7 +179,7 @@ Function Get-MailboxForwarding {
 
 			#>
 			$forwardingSMTPAddress = $mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress) }
-			#$forward = $mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress -and -not($domains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or ($null -ne $_.ForwardingAddress -and -not($domains -contains $hashRecipients[$_.ForwardingSMTPAddress].split('@')[1]) ) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward	
+			#$forward = $mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress -and -not($internalDomains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or ($null -ne $_.ForwardingAddress -and -not($internalDomains -contains $hashRecipients[$_.ForwardingSMTPAddress].split('@')[1]) ) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward	
 			
 			if ($null -ne $forwardingSMTPAddress) {
 				Write-Host -ForegroundColor yellow "$($mailbox.Name) - $($mailbox.PrimarySMTPAddress) - 1 forwardingSMTPAddress parameter found"
@@ -190,7 +193,7 @@ Function Get-MailboxForwarding {
 
 				$recipientDomain = $forwardingSMTPAddress.forwardingSMTPAddress.Split('@')[1]
 
-				if ($internalDomains -match $recipientDomain) {
+				if ($internalDomains -contains $recipientDomain) {
 					$forwardingWorks = "True ($recipientDomain = internalDomain)"
 				}
 				elseif ($autoForwardMode -eq 'Automatic' -or $autoForwardMode -eq 'Off') {
@@ -216,6 +219,7 @@ Function Get-MailboxForwarding {
 					DeliverToMailboxAndForward             = $forwardingSMTPAddress.DeliverToMailboxAndForward
 					InboxRulePriority                      = '-'
 					InboxRuleEnabled                       = '-'
+					InboxRuleForwardAddressConverted       = '-'
 					InboxRuleRedirectTo                    = '-'
 					InboxRuleForwardTo                     = '-'
 					InboxRuleForwardAsAttachmentTo         = '-'
@@ -235,62 +239,169 @@ Function Get-MailboxForwarding {
 			$i++
 			Write-Host -ForegroundColor cyan "Processing Inbox rules - $($mailbox.Name) - $($mailbox.PrimarySMTPAddress) [$i/$($mailboxesList.count)]"
 
-			$mailboxInboxForwardRules = Get-InboxRule -Mailbox "$($mailbox.DistinguishedName)" | Where-Object { ($null -ne $_.ForwardTo) -or ($null -ne $_.ForwardAsAttachmentTo) -or ($null -ne $_.RedirectTo) -or ($_.SendTextMessageNotificationTo.count -gt 0) } | Select-Object Identity, Enabled, ForwardTo, ForwardAsAttachmentTo, RedirectTo, SendTextMessageNotificationTo, Description, Priority
+			$inboxForwardRules = @(Get-InboxRule -Mailbox "$($mailbox.DistinguishedName)" | Where-Object { ($null -ne $_.ForwardTo) -or ($null -ne $_.ForwardAsAttachmentTo) -or ($null -ne $_.RedirectTo) -or ($_.SendTextMessageNotificationTo.count -gt 0) }) | Select-Object Identity, Enabled, ForwardTo, ForwardAsAttachmentTo, RedirectTo, SendTextMessageNotificationTo, Description, Priority
 			
-			if (($mailboxInboxForwardRules | Measure-Object).count -gt 0) {
-				Write-Host -ForegroundColor yellow "$($mailbox.Name) - $($mailbox.PrimarySMTPAddress) - $(($mailboxInboxForwardRules | Measure-Object).count) forward rule(s) found"
-
-				foreach ($mailboxInboxForwardRule in $mailboxInboxForwardRules) {
-					if ($null -ne $mailboxInboxForwardRule) {  
-						if ($forwardList.PrimarySMTPAddress -contains $mailbox.PrimarySmtpAddress) {
-							$precedence = 'ForwardingAddress | ForwardingSMTPAddress is already set for this mailbox. They have a higher priority than inbox rules. This inbox rule will be ignored'
-						}
-						else {
-							$precedence = '-'
-						}
-
-						<#
-						if ($internalDomains -match $forwardingSMTPAddress.forwardingSMTPAddress.Split('@')[1] -and $autoForwardMode) {
-							$forwardingWorks = "True (Autoforward mode = $autoForwardMode)"
-						}
-						elseif ($autoForwardMode -eq 'Automatic' -or $autoForwardMode -eq 'Off') {
-							$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
-						}
-						else {
-							$forwardingWorks = "True (Autoforward mode = $autoForwardMode)"
-						}
-						#>
-						$object = [PSCustomObject][ordered]@{
-							Identity                               = $mailbox.Identity
-							Name                                   = $mailbox.Name
-							DisplayName                            = $mailbox.DisplayName	
-							PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
-							UserPrincipalName                      = $mailbox.UserPrincipalName
-							ForwardType                            = 'InboxRule'
-							ForwardScope                           = ''
-							Precedence                             = $precedence
-							ForwardingAddress                      = '-'
-							ForwardingAddressConverted             = '-'
-							ForwardingSMTPAddress                  = '-'
-							ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
-							DeliverToMailboxAndForward             = '-'
-							InboxRulePriority                      = $mailboxInboxForwardRule.Priority
-							InboxRuleEnabled                       = $mailboxInboxForwardRule.Enabled
-							InboxRuleRedirectTo                    = $mailboxInboxForwardRule.RedirectTo
-							InboxRuleForwardTo                     = $mailboxInboxForwardRule.ForwardTo
-							InboxRuleForwardAsAttachmentTo         = $mailboxInboxForwardRule.ForwardAsAttachmentTo
-							InboxRuleSendTextMessageNotificationTo = $mailboxInboxForwardRule.SendTextMessageNotificationTo
-							InboxRuleDescription                   = $mailboxInboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # on supprime les sauts de lignes et les tabulations 
-						}
-						
-						#Add object to an array
-						$forwardList.Add($object)
-
-					}
-				}
+			if ($inboxForwardRules.count -gt 0) {
+				Write-Host -ForegroundColor yellow "$($mailbox.Name) - $($mailbox.PrimarySMTPAddress) - $(($inboxForwardRules ).count) forward rule(s) found"
 			}
-			else {
-				#Write-Host -ForegroundColor green "$($mailbox.Name) $($mailbox.PrimarySMTPAddress) - No inbox forward rule found"	
+
+			foreach ($inboxForwardRule in $inboxForwardRules) {
+				if ($forwardList.PrimarySMTPAddress -contains $mailbox.PrimarySmtpAddress) {
+					$precedence = 'ForwardingAddress | ForwardingSMTPAddress is already set for this mailbox. They have a higher priority than inbox rules. This inbox rule will be ignored'
+				}
+				else {
+					$precedence = '-'
+				}
+
+ 
+				# ForwardTo, ForwardAsAttachmentTo, RedirectTo are in the following format:
+				# "name" [EX:/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=xxxx] if recipient is an object in the organization (mailbox, mail contact, etc.)
+				# "name" [SMTP: is not in the same organization
+				# ForwardTo, ForwardAsAttachmentTo, RedirectTo can be a list of recipients
+				# SendTextMessageNotificationTo is a list of phone numbers
+			
+				foreach ($forwardTo in $inboxForwardRule.ForwardTo) {
+					$temp = $forwardTo.split(' [')[0].Replace('"', '')
+			
+					if ($temp -like '*@*') {
+						$recipientDomain = $temp.Split('@')[1]
+					}
+					elseif ($null -ne $temp) {
+						$temp = $hashRecipients[$temp]
+						$recipientDomain = $temp.Split('@')[1]
+					}
+			
+					$object = [PSCustomObject][ordered]@{
+						Identity                               = $mailbox.Identity
+						Name                                   = $mailbox.Name
+						DisplayName                            = $mailbox.DisplayName	
+						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
+						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardType                            = 'InboxRule'
+						ForwardScope                           = $forwardingScope
+						Precedence                             = $precedence
+						ForwardingAddress                      = '-'
+						ForwardingAddressConverted             = '-'
+						ForwardingSMTPAddress                  = '-'
+						ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
+						DeliverToMailboxAndForward             = '-'
+						InboxRulePriority                      = $inboxForwardRule.Priority
+						InboxRuleEnabled                       = $inboxForwardRule.Enabled
+						InboxRuleForwardAddressConverted       = $temp
+						InboxRuleRedirectTo                    = '-'
+						InboxRuleForwardTo                     = $forwardTo
+						InboxRuleForwardAsAttachmentTo         = '-'
+						InboxRuleSendTextMessageNotificationTo = '-'
+						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+					}
+			
+					#Add object to an array
+					$forwardList.Add($object)
+				}
+			
+				foreach ($forwardAsAttachmentTo in $inboxForwardRule.ForwardAsAttachmentTo) {
+					$temp = $forwardAsAttachmentTo.split(' [')[0].Replace('"', '')
+			
+					if ($temp -like '*@*') {
+						$recipientDomain = $temp.Split('@')[1]
+					}
+					elseif ($null -ne $temp) {
+						$temp = $hashRecipients[$temp]
+						$recipientDomain = $temp.Split('@')[1]
+					}
+						
+					$object = [PSCustomObject][ordered]@{
+						Identity                               = $mailbox.Identity
+						Name                                   = $mailbox.Name
+						DisplayName                            = $mailbox.DisplayName	
+						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
+						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardType                            = 'InboxRule'
+						ForwardScope                           = $forwardingScope
+						Precedence                             = $precedence
+						ForwardingAddress                      = '-'
+						ForwardingAddressConverted             = '-'
+						ForwardingSMTPAddress                  = '-'
+						ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
+						DeliverToMailboxAndForward             = '-'
+						InboxRulePriority                      = $inboxForwardRule.Priority
+						InboxRuleEnabled                       = $inboxForwardRule.Enabled
+						InboxRuleForwardAddressConverted       = $temp
+						InboxRuleRedirectTo                    = '-'
+						InboxRuleForwardTo                     = '-'
+						InboxRuleForwardAsAttachmentTo         = $forwardAsAttachmentTo
+						InboxRuleSendTextMessageNotificationTo = '-'
+						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+					}
+			
+					#Add object to an array
+					$forwardList.Add($object)
+				}
+			
+				foreach ($redirectTo in $inboxForwardRule.RedirectTo) {
+					$temp = $redirectTo.split(' [')[0].Replace('"', '')
+			
+					if ($temp -like '*@*') {
+						$recipientDomain = $temp.Split('@')[1]
+					}
+					elseif ($null -ne $temp) {
+						$temp = $hashRecipients[$temp]
+						$recipientDomain = $temp.Split('@')[1]
+					}
+			
+					$object = [PSCustomObject][ordered]@{
+						Identity                               = $mailbox.Identity
+						Name                                   = $mailbox.Name
+						DisplayName                            = $mailbox.DisplayName	
+						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
+						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardType                            = 'InboxRule'
+						ForwardScope                           = $forwardingScope
+						Precedence                             = $precedence
+						ForwardingAddress                      = '-'
+						ForwardingAddressConverted             = '-'
+						ForwardingSMTPAddress                  = '-'
+						ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
+						DeliverToMailboxAndForward             = '-'
+						InboxRulePriority                      = $inboxForwardRule.Priority
+						InboxRuleEnabled                       = $inboxForwardRule.Enabled
+						InboxRuleForwardAddressConverted       = $temp
+						InboxRuleRedirectTo                    = $redirectTo
+						InboxRuleForwardTo                     = '-'
+						InboxRuleForwardAsAttachmentTo         = '-'
+						InboxRuleSendTextMessageNotificationTo = '-'
+						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+					}
+						
+					#Add object to an array
+					$forwardList.Add($object)
+				}
+
+				foreach ($sendTextMessageNotificationTo in $inboxForwardRule.SendTextMessageNotificationTo) {
+
+					$forwardingScope = 'External'
+			
+					$object = [PSCustomObject][ordered]@{
+						Identity                               = $mailbox.Identity
+						Name                                   = $mailbox.Name
+						DisplayName                            = $mailbox.DisplayName	
+						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
+						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardType                            = 'InboxRule'
+						ForwardScope                           = $forwardingScope
+						InboxRulePriority                      = $inboxForwardRule.Priority
+						InboxRuleEnabled                       = $inboxForwardRule.Enabled
+						InboxRuleForwardAddressConverted       = $temp
+						InboxRuleRedirectTo                    = '-'
+						InboxRuleForwardTo                     = '-'
+						InboxRuleForwardAsAttachmentTo         = '-'
+						InboxRuleSendTextMessageNotificationTo = $sendTextMessageNotificationTo
+						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+					}
+									
+					#Add object to an array
+					$forwardList.Add($object)
+				}						
 			}
 		}
 	}
@@ -298,7 +409,7 @@ Function Get-MailboxForwarding {
 	Write-Host -ForegroundColor cyan "$($forwardList.count) forward(s) found"
 
 	$forwardList | ForEach-Object {
-		if ((($_.ForwardingAddressConverted -like '*@*') -and -not($domains -contains $_.ForwardingAddressConverted.split('@')[1])) -or (($_.ForwardingSMTPAddress -like '*@*') -and -not($domains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or (($_.InboxRuleForwardTo -like '*@*') -and -not($domains -contains $_.InboxRuleForwardTo)) -or (($_.InboxRuleForwardAsAttachmentTo -like '*@*') -and -not($domains -contains $_.InboxRuleForwardAsAttachmentTo)) -or (($_.InboxRuleRedirectTo -like '*@*') -and -not($domains -contains $_.InboxRuleRedirectTo)) -or ($_.InboxRuleSendTextMessageNotificationTo -ne '-')) {
+		if ((($_.ForwardingAddressConverted -like '*@*') -and -not($internalDomains -contains $_.ForwardingAddressConverted.split('@')[1])) -or (($_.ForwardingSMTPAddress -like '*@*') -and -not($internalDomains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or (($_.InboxRuleForwardAddressConverted -like '*@*') -and -not($internalDomains -contains $_.InboxRuleForwardAddressConverted.split('@')[1]))) {
 			$_.ForwardScope = 'External'
 		}
 		else {
