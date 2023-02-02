@@ -135,7 +135,7 @@ Function Get-MailboxForwarding {
 					$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
 				}
 				else {
-					$forwardingWorks = "Yes (Autoforward mode = $autoForwardMode) and address used is an internal object (contact maybe)"
+					$forwardingWorks = "Yes (Autoforward mode = $autoForwardMode) and address used is an internal object (contact or mailbox)"
 				}
 
 				$object = [PSCustomObject][ordered]@{
@@ -197,7 +197,7 @@ Function Get-MailboxForwarding {
 					$forwardingWorks = "False (Autoforward mode = $autoForwardMode)" 
 				}
 				else {
-					$forwardingWorks = "Maybe (Autoforward mode = $autoForwardMode), check if RemoteDomain(s) allows external forwarding"
+					$forwardingWorks = "Maybe (Autoforward mode = $autoForwardMode), check if RemoteDomain(s) allows external forwarding and check if TransportRule(s) exist to prevent external forwarding"
 				}
 
 				$object = [PSCustomObject][ordered]@{
