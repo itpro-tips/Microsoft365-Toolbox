@@ -16,7 +16,7 @@ function Get-MgUsersAndPasswordPolicies {
     }
     
     # don't know if a user can have more than one password policy
-    $users = Get-MgUser -All -Property UserPrincipalName, PasswordPolicies | Select-Object -Property UserPrincipalName, @{Name = 'PasswordPolicies'; Expression = { $_.PasswordPolicies -join '|' } }
+    $users = Get-MgUser -All -Property UserPrincipalName, PasswordPolicies, OnPremisesSyncEnabled | Select-Object -Property UserPrincipalName, @{Name = 'PasswordPolicies'; Expression = { $_.PasswordPolicies -join '|' } }, OnPremisesSyncEnabled
 
     return $users
 } 
