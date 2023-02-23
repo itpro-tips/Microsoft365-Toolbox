@@ -23,6 +23,32 @@ Function Get-MailboxForwarding {
 		[switch]$ExportResults
 	)
 
+	function Translate-Recipient {
+		Param (
+			[Parameter(Mandatory = $true)]
+			[string]$Recipient
+		)
+					
+		# "name" [EX:/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=xxxx] if recipient is an object in the organization (mailbox, mail contact, etc.)
+		# "name" [SMTP: is not in the same organization
+
+		if ($Recipient -like '*`[SMTP:*@*') {
+			# need to escape the [
+			$recipientConverted = ($Recipient -split 'SMTP:')[1].TrimEnd(']')
+		}
+		# we use the LegacyExchangeDN after the EX: to get the recipient domain
+		elseif ($Recipient -like '*`[EX:*') {
+			# remove the last character (])
+			$temp = ($Recipient -split 'EX:')[1].TrimEnd(']')
+			$recipientConverted = $hashRecipients[$temp]
+		}
+		else {
+			$recipientConverted = 'unknown format'
+		}
+
+		return $recipientConverted
+	}
+
 	[System.Collections.Generic.List[PSObject]]$mailboxesList = @()
 	[System.Collections.Generic.List[PSObject]]$forwardList = @()
 
@@ -44,7 +70,7 @@ Function Get-MailboxForwarding {
 		$autoForwardMode = $outboundSpamPolicy.AutoForwardingMode
 		
 		if ($autoForwardMode -eq 'Automatic') {
-			Write-Host "Careful, the value 'Automatic is now the same as AutoForwardEnable=Off, means autoForward is even if the Remote domain(s) are configured with AutoForwardEnable = `$true
+			Write-Host "Careful, the value 'Automatic is now the same as AutoForwardEnable=Off, means autoForward is disabled even if the Remote domain(s) are configured with AutoForwardEnable = `$true
 		Sources:
 		https://office365itpros.com/2020/11/12/microsoft-clamps-down-mail-forwarding-exchange-online/
 		http://blog.icewolf.ch/archive/2020/10/06/how-to-control-the-many-ways-of-email-forwarding-in.aspx
@@ -55,13 +81,30 @@ Function Get-MailboxForwarding {
 		}
 	}
 
-	$hashRecipients = @{ }
+	$hashRecipients = @{}
 	
 	Write-Verbose  'Get Exchange recipients'
+	
+	# Get all recipients, needed for forwardingAddress
 	$recipients = Get-EXORecipient -ResultSize Unlimited
 
 	$recipients | ForEach-Object {
 		$hashRecipients.Add($_.Name, $_.PrimarySmtpAddress)
+	}
+	#>
+
+	# Get-LegacyExchangeDN, needed for inbox rules. We can also use name or ID but legacyExchangeDN is more reliable
+	# Get-EXORecipient does not contain LegacyExchangeDN property so we need to get it from Get-EXOMailbox / Get-DistributionGroup and Get-UnifiedGroup
+	Get-ExoMailbox -ResultSize Unlimited -Properties LegacyExchangeDN | ForEach-Object {
+		$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+	}
+
+	Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
+		$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+	}
+
+	Get-UnifiedGroup -ResultSize Unlimited | ForEach-Object {
+		$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
 	}
 
 	Write-Verbose 'Get all mailboxes'
@@ -146,11 +189,11 @@ Function Get-MailboxForwarding {
 					DisplayName                            = $mailbox.DisplayName	
 					PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
 					UserPrincipalName                      = $mailbox.UserPrincipalName
+					ForwardingAddressConverted             = $forwardingAddress.ForwardingAddressConverted
 					ForwardType                            = 'ForwardingAddress'
 					ForwardScope                           = ''
 					Precedence                             = '-'
 					ForwardingAddress                      = $forwardingAddress.ForwardingAddress
-					ForwardingAddressConverted             = $forwardingAddress.ForwardingAddressConverted
 					ForwardingSMTPAddress                  = '-'
 					ForwardingWorks                        = $forwardingWorks
 					DeliverToMailboxAndForward             = '-'
@@ -209,11 +252,11 @@ Function Get-MailboxForwarding {
 					DisplayName                            = $mailbox.DisplayName	
 					PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
 					UserPrincipalName                      = $mailbox.UserPrincipalName
+					ForwardingAddressConverted             = $forwardingSMTPAddress.ForwardingSMTPAddress.replace('smtp:','')
 					ForwardType                            = 'ForwardingSMTPAddress'
 					ForwardScope                           = ''
 					Precedence                             = $precedence
 					ForwardingAddress                      = '-'
-					ForwardingAddressConverted             = '-'
 					ForwardingSMTPAddress                  = $forwardingSMTPAddress.ForwardingSMTPAddress
 					ForwardingWorks                        = $forwardingWorks
 					DeliverToMailboxAndForward             = $forwardingSMTPAddress.DeliverToMailboxAndForward
@@ -261,33 +304,26 @@ Function Get-MailboxForwarding {
 				# SendTextMessageNotificationTo is a list of phone numbers
 			
 				foreach ($forwardTo in $inboxForwardRule.ForwardTo) {
-					$temp = $forwardTo.split(' [')[0].Replace('"', '')
-			
-					if ($temp -like '*@*') {
-						$recipientDomain = $temp.Split('@')[1]
-					}
-					elseif ($null -ne $temp) {
-						$temp = $hashRecipients[$temp]
-						$recipientDomain = $temp.Split('@')[1]
-					}
-			
+					
+					$recipientConverted = Translate-Recipient -Recipient $forwardTo
+
 					$object = [PSCustomObject][ordered]@{
 						Identity                               = $mailbox.Identity
 						Name                                   = $mailbox.Name
 						DisplayName                            = $mailbox.DisplayName	
 						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
 						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardingAddressConverted             = $recipientConverted
 						ForwardType                            = 'InboxRule'
 						ForwardScope                           = $forwardingScope
 						Precedence                             = $precedence
 						ForwardingAddress                      = '-'
-						ForwardingAddressConverted             = '-'
 						ForwardingSMTPAddress                  = '-'
-						ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
+						ForwardingWorks                        = 'Not evaluated yet(check precedence and InboxRuleEnabled and forward address)'
 						DeliverToMailboxAndForward             = '-'
 						InboxRulePriority                      = $inboxForwardRule.Priority
 						InboxRuleEnabled                       = $inboxForwardRule.Enabled
-						InboxRuleForwardAddressConverted       = $temp
+						InboxRuleForwardAddressConverted       = $recipientConverted
 						InboxRuleRedirectTo                    = '-'
 						InboxRuleForwardTo                     = $forwardTo
 						InboxRuleForwardAsAttachmentTo         = '-'
@@ -300,15 +336,7 @@ Function Get-MailboxForwarding {
 				}
 			
 				foreach ($forwardAsAttachmentTo in $inboxForwardRule.ForwardAsAttachmentTo) {
-					$temp = $forwardAsAttachmentTo.split(' [')[0].Replace('"', '')
-			
-					if ($temp -like '*@*') {
-						$recipientDomain = $temp.Split('@')[1]
-					}
-					elseif ($null -ne $temp) {
-						$temp = $hashRecipients[$temp]
-						$recipientDomain = $temp.Split('@')[1]
-					}
+					$recipientConverted = Translate-Recipient -Recipient $forwardAsAttachmentTo
 						
 					$object = [PSCustomObject][ordered]@{
 						Identity                               = $mailbox.Identity
@@ -316,17 +344,17 @@ Function Get-MailboxForwarding {
 						DisplayName                            = $mailbox.DisplayName	
 						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
 						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardingAddressConverted             = $recipientConverted
 						ForwardType                            = 'InboxRule'
 						ForwardScope                           = $forwardingScope
 						Precedence                             = $precedence
 						ForwardingAddress                      = '-'
-						ForwardingAddressConverted             = '-'
 						ForwardingSMTPAddress                  = '-'
-						ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
+						ForwardingWorks                        = 'Not evaluated yet(check precedence and InboxRuleEnabled and forward address)'
 						DeliverToMailboxAndForward             = '-'
 						InboxRulePriority                      = $inboxForwardRule.Priority
 						InboxRuleEnabled                       = $inboxForwardRule.Enabled
-						InboxRuleForwardAddressConverted       = $temp
+						InboxRuleForwardAddressConverted       = $recipientConverted
 						InboxRuleRedirectTo                    = '-'
 						InboxRuleForwardTo                     = '-'
 						InboxRuleForwardAsAttachmentTo         = $forwardAsAttachmentTo
@@ -339,15 +367,7 @@ Function Get-MailboxForwarding {
 				}
 			
 				foreach ($redirectTo in $inboxForwardRule.RedirectTo) {
-					$temp = $redirectTo.split(' [')[0].Replace('"', '')
-			
-					if ($temp -like '*@*') {
-						$recipientDomain = $temp.Split('@')[1]
-					}
-					elseif ($null -ne $temp) {
-						$temp = $hashRecipients[$temp]
-						$recipientDomain = $temp.Split('@')[1]
-					}
+					$recipientConverted = Translate-Recipient -Recipient $redirectTo
 			
 					$object = [PSCustomObject][ordered]@{
 						Identity                               = $mailbox.Identity
@@ -355,17 +375,17 @@ Function Get-MailboxForwarding {
 						DisplayName                            = $mailbox.DisplayName	
 						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
 						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardingAddressConverted             = $recipientConverted
 						ForwardType                            = 'InboxRule'
 						ForwardScope                           = $forwardingScope
 						Precedence                             = $precedence
 						ForwardingAddress                      = '-'
-						ForwardingAddressConverted             = '-'
 						ForwardingSMTPAddress                  = '-'
 						ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
 						DeliverToMailboxAndForward             = '-'
 						InboxRulePriority                      = $inboxForwardRule.Priority
 						InboxRuleEnabled                       = $inboxForwardRule.Enabled
-						InboxRuleForwardAddressConverted       = $temp
+						InboxRuleForwardAddressConverted       = $recipientConverted
 						InboxRuleRedirectTo                    = $redirectTo
 						InboxRuleForwardTo                     = '-'
 						InboxRuleForwardAsAttachmentTo         = '-'
@@ -387,6 +407,7 @@ Function Get-MailboxForwarding {
 						DisplayName                            = $mailbox.DisplayName	
 						PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
 						UserPrincipalName                      = $mailbox.UserPrincipalName
+						ForwardingAddressConverted             = $sendTextMessageNotificationTo
 						ForwardType                            = 'InboxRule'
 						ForwardScope                           = $forwardingScope
 						InboxRulePriority                      = $inboxForwardRule.Priority
