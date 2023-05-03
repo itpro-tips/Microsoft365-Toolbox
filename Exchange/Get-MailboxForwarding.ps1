@@ -20,7 +20,9 @@ Function Get-MailboxForwarding {
 		[Parameter(Mandatory = $false)] 
 		[switch]$InboxRulesOnly,
 		[Parameter(Mandatory = $false)] 
-		[switch]$ExportResults
+		[switch]$ExportResults,
+		[Parameter(Mandatory = $false)] 
+		[switch]$ExchangeOnPremise
 	)
 
 	function Translate-Recipient {
@@ -61,16 +63,17 @@ Function Get-MailboxForwarding {
 		Write-Host "Remote Domain '$remotedomain' AutoForwardEnabled: $($remoteDomain.AutoForwardEnabled)" -ForegroundColor Cyan
 	}
 
-	$outboundSpamPolicies = Get-HostedOutboundSpamFilterPolicy
+	if (-not $ExchangeOnPremise) {
+		$outboundSpamPolicies = Get-HostedOutboundSpamFilterPolicy
 
-	foreach ($outboundSpamPolicy in $outboundSpamPolicies) {
+		foreach ($outboundSpamPolicy in $outboundSpamPolicies) {
 		
-		Write-Host "OutboundSpamPolicy '$($outboundSpamPolicy.Name)' AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor Cyan
+			Write-Host "OutboundSpamPolicy '$($outboundSpamPolicy.Name)' AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor Cyan
 		
-		$autoForwardMode = $outboundSpamPolicy.AutoForwardingMode
+			$autoForwardMode = $outboundSpamPolicy.AutoForwardingMode
 		
-		if ($autoForwardMode -eq 'Automatic') {
-			Write-Host "Careful, the value 'Automatic is now the same as AutoForwardEnable=Off, means autoForward is disabled even if the Remote domain(s) are configured with AutoForwardEnable = `$true
+			if ($autoForwardMode -eq 'Automatic') {
+				Write-Host "Careful, the value 'Automatic is now the same as AutoForwardEnable=Off, means autoForward is disabled even if the Remote domain(s) are configured with AutoForwardEnable = `$true
 		Sources:
 		https://office365itpros.com/2020/11/12/microsoft-clamps-down-mail-forwarding-exchange-online/
 		http://blog.icewolf.ch/archive/2020/10/06/how-to-control-the-many-ways-of-email-forwarding-in.aspx
@@ -78,6 +81,7 @@ Function Get-MailboxForwarding {
 		https://techcommunity.microsoft.com/t5/exchange-team-blog/all-you-need-to-know-about-automatic-email-forwarding-in/ba-p/2074888
 	
 		RoadMap ID: MC221113" -ForeGround Yellow
+			}
 		}
 	}
 
@@ -86,7 +90,12 @@ Function Get-MailboxForwarding {
 	Write-Verbose  'Get Exchange recipients'
 	
 	# Get all recipients, needed for forwardingAddress
-	$recipients = Get-EXORecipient -ResultSize Unlimited
+	if (-not $ExchangeOnPremise) {
+		$recipients = Get-EXORecipient -ResultSize Unlimited
+	}
+	else {
+		$recipients = Get-Recipient -ResultSize Unlimited
+	}
 
 	$recipients | ForEach-Object {
 		$hashRecipients.Add($_.Name, $_.PrimarySmtpAddress)
@@ -95,16 +104,28 @@ Function Get-MailboxForwarding {
 
 	# Get-LegacyExchangeDN, needed for inbox rules. We can also use name or ID but legacyExchangeDN is more reliable
 	# Get-EXORecipient does not contain LegacyExchangeDN property so we need to get it from Get-EXOMailbox / Get-DistributionGroup and Get-UnifiedGroup
-	Get-ExoMailbox -ResultSize Unlimited -Properties LegacyExchangeDN | ForEach-Object {
-		$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
-	}
+	if (-not $ExchangeOnPremise) {
+	
+		Get-ExoMailbox -ResultSize Unlimited -Properties LegacyExchangeDN | ForEach-Object {
+			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+		}
 
-	Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
-		$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
-	}
+		Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
+			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+		}
 
-	Get-UnifiedGroup -ResultSize Unlimited | ForEach-Object {
-		$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+		Get-UnifiedGroup -ResultSize Unlimited | ForEach-Object {
+			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+		}
+	}
+	else {
+		Get-Mailbox -ResultSize Unlimited | ForEach-Object {
+			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+		}
+
+		Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
+			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+		}
 	}
 
 	Write-Verbose 'Get all mailboxes'
@@ -112,9 +133,14 @@ Function Get-MailboxForwarding {
 	if ($null -ne $Mailboxes -and $Mailboxes.Count -gt 0) {
 		foreach ($mbx in $Mailboxes) {
 			try {
-				$mailbox = Get-EXOMailbox -Identity $mbx -ErrorAction Stop
-				$mailbox = Get-EXOMailbox -Identity $mbx -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop
-				$mailboxesList.Add($mailbox)
+				if (-not $ExchangeOnPremise) {
+					$mailbox = Get-EXOMailbox -Identity $mbx -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop
+					$mailboxesList.Add($mailbox)
+				}
+				else {
+					$mailbox = Get-Mailbox -Identity $mbx -ErrorAction Stop
+					$mailboxesList.Add($mailbox)
+				}
 			}
 			catch {
 				Write-Warning "$mbx mailbox not found. $($_.Exception.Message)"
@@ -124,9 +150,14 @@ Function Get-MailboxForwarding {
 	# else get all mailboxes
 	else {
 		try {
-			# Get-EXOMailbox contains only a subset of properties by default. We need to add properties needed.
-			# Note: we can use -PropertySets Delivery
-			$mailboxesList = Get-EXOMailbox -ResultSize Unlimited -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop | Sort-Object Name
+			if (-not $ExchangeOnPremise) {
+				# Get-EXOMailbox contains only a subset of properties by default. We need to add properties needed.
+				# Note: we can use -PropertySets Delivery
+				$mailboxesList = Get-EXOMailbox -ResultSize Unlimited -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop | Sort-Object Name
+			}
+			else {
+				$mailboxesList = Get-Mailbox -ResultSize Unlimited -ErrorAction Stop | Sort-Object Name
+			}
 		}
 		catch {
 			Write-Warning "Mailboxes not found. $($_.Exception.Message)"
@@ -165,7 +196,13 @@ Function Get-MailboxForwarding {
 			ForwardingAddress can be set by using the -ForwardingAddress parameter in the command set-mailbox.
 			#>
 
-			$forwardingAddress = $mailbox | Where-Object { ($null -ne $_.ForwardingAddress) } | Select-Object Name, PrimarySmtpAddress, ForwardingAddress, @{Name = 'ForwardingAddressConverted'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward
+			if ($ExchangeOnPremise) {
+				$forwardingAddress = $mailbox | Where-Object { ($null -ne $_.ForwardingAddress) } | Select-Object Name, PrimarySmtpAddress, ForwardingAddress, @{Name = 'ForwardingAddressConverted'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress.Name].Address } } }, DeliverToMailboxAndForward
+			}
+			else {
+				$forwardingAddress = $mailbox | Where-Object { ($null -ne $_.ForwardingAddress) } | Select-Object Name, PrimarySmtpAddress, ForwardingAddress, @{Name = 'ForwardingAddressConverted'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward
+			}
+			
 			#$forward = $mailbox | Where-Object { ($null -ne $_.ForwardingSMTPAddress -and -not($internalDomains -contains $_.ForwardingSMTPAddress.split('@')[1])) -or ($null -ne $_.ForwardingAddress -and -not($internalDomains -contains $hashRecipients[$_.ForwardingSMTPAddress].split('@')[1]) ) } | Select-Object Name, PrimarySmtpAddress, ForwardingSMTPAddress, ForwardingAddress, @{Name = 'ForwardingAddressConvertSMTP'; Expression = { if ($null -ne $_.ForwardingAddress) { $hashRecipients[$_.ForwardingAddress] } } }, DeliverToMailboxAndForward	
 			
 			if ($null -ne $forwardingAddress) {  
@@ -234,7 +271,16 @@ Function Get-MailboxForwarding {
 					$precedence = '-'
 				}
 
-				$recipientDomain = $forwardingSMTPAddress.forwardingSMTPAddress.Split('@')[1]
+				if ($ExchangeOnPremise) {
+					# in exchange on premise, the ForwardingSMTPAddress is a ProxyAddress and is stored in the ProxyAddressesString attribute (the value is smtp:xxx)
+					$recipientDomain = $forwardingSMTPAddress.ForwardingSmtpAddress.ProxyAddressString.Split('@')[1]
+					$forwardingAddressConverted = $forwardingSMTPAddress.ForwardingSmtpAddress.ProxyAddressString.replace('smtp:', '')
+				}
+				else {
+					$recipientDomain = $forwardingSMTPAddress.forwardingSMTPAddress.Split('@')[1]
+					$forwardingAddressConverted = $forwardingSMTPAddress.forwardingSMTPAddress.replace('smtp:', '')
+				}
+				
 
 				if ($internalDomains -contains $recipientDomain) {
 					$forwardingWorks = "True ($recipientDomain = internalDomain)"
@@ -252,7 +298,7 @@ Function Get-MailboxForwarding {
 					DisplayName                            = $mailbox.DisplayName	
 					PrimarySmtpAddress                     = $mailbox.PrimarySmtpAddress
 					UserPrincipalName                      = $mailbox.UserPrincipalName
-					ForwardingAddressConverted             = $forwardingSMTPAddress.ForwardingSMTPAddress.replace('smtp:','')
+					ForwardingAddressConverted             = $forwardingAddressConverted
 					ForwardType                            = 'ForwardingSMTPAddress'
 					ForwardScope                           = ''
 					Precedence                             = $precedence
@@ -296,7 +342,6 @@ Function Get-MailboxForwarding {
 					$precedence = '-'
 				}
 
- 
 				# ForwardTo, ForwardAsAttachmentTo, RedirectTo are in the following format:
 				# "name" [EX:/o=ExchangeLabs/ou=Exchange Administrative Group (FYDIBOHF23SPDLT)/cn=Recipients/cn=xxxx] if recipient is an object in the organization (mailbox, mail contact, etc.)
 				# "name" [SMTP: is not in the same organization
@@ -305,6 +350,13 @@ Function Get-MailboxForwarding {
 			
 				foreach ($forwardTo in $inboxForwardRule.ForwardTo) {
 					
+					if ($ExchangeOnPremise) {
+						$inboxForwardRuleDescription = $inboxForwardRule.description.ToString().replace("`t", "") # delete line breaks and tabs
+					}
+					else {
+						$inboxForwardRuleDescription = $inboxForwardRule.description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs
+					}
+
 					$recipientConverted = Translate-Recipient -Recipient $forwardTo
 
 					$object = [PSCustomObject][ordered]@{
@@ -328,7 +380,7 @@ Function Get-MailboxForwarding {
 						InboxRuleForwardTo                     = $forwardTo
 						InboxRuleForwardAsAttachmentTo         = '-'
 						InboxRuleSendTextMessageNotificationTo = '-'
-						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+						InboxRuleDescription                   = $inboxForwardRuleDescription
 					}
 			
 					#Add object to an array
@@ -336,6 +388,13 @@ Function Get-MailboxForwarding {
 				}
 			
 				foreach ($forwardAsAttachmentTo in $inboxForwardRule.ForwardAsAttachmentTo) {
+					if ($ExchangeOnPremise) {
+						$inboxForwardRuleDescription = $inboxForwardRule.description.ToString().("`r`n", " ").replace("`t", "") # delete line breaks and tabs
+					}
+					else {
+						$inboxForwardRuleDescription = $inboxForwardRule.description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs
+					}
+					
 					$recipientConverted = Translate-Recipient -Recipient $forwardAsAttachmentTo
 						
 					$object = [PSCustomObject][ordered]@{
@@ -359,7 +418,7 @@ Function Get-MailboxForwarding {
 						InboxRuleForwardTo                     = '-'
 						InboxRuleForwardAsAttachmentTo         = $forwardAsAttachmentTo
 						InboxRuleSendTextMessageNotificationTo = '-'
-						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+						InboxRuleDescription                   = $inboxForwardRuleDescription
 					}
 			
 					#Add object to an array
@@ -367,6 +426,14 @@ Function Get-MailboxForwarding {
 				}
 			
 				foreach ($redirectTo in $inboxForwardRule.RedirectTo) {
+					
+					if ($ExchangeOnPremise) {
+						$inboxForwardRuleDescription = $inboxForwardRule.description.ToString().replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs
+					}
+					else {
+						$inboxForwardRuleDescription = $inboxForwardRule.description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs
+					}
+					
 					$recipientConverted = Translate-Recipient -Recipient $redirectTo
 			
 					$object = [PSCustomObject][ordered]@{
@@ -390,7 +457,7 @@ Function Get-MailboxForwarding {
 						InboxRuleForwardTo                     = '-'
 						InboxRuleForwardAsAttachmentTo         = '-'
 						InboxRuleSendTextMessageNotificationTo = '-'
-						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+						InboxRuleDescription                   = $inboxForwardRuleDescription
 					}
 						
 					#Add object to an array
@@ -398,6 +465,13 @@ Function Get-MailboxForwarding {
 				}
 
 				foreach ($sendTextMessageNotificationTo in $inboxForwardRule.SendTextMessageNotificationTo) {
+
+					if ($ExchangeOnPremise) {
+						$sendTextMessageNotificationToDescription = $sendTextMessageNotificationTo.Description.ToString().("`r`n", " ").replace("`t", "") # delete line breaks and tabs
+					}
+					else {
+						$sendTextMessageNotificationToDescription = $sendTextMessageNotificationTo.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs
+					}
 
 					$forwardingScope = 'External'
 			
@@ -417,7 +491,7 @@ Function Get-MailboxForwarding {
 						InboxRuleForwardTo                     = '-'
 						InboxRuleForwardAsAttachmentTo         = '-'
 						InboxRuleSendTextMessageNotificationTo = $sendTextMessageNotificationTo
-						InboxRuleDescription                   = $inboxForwardRule.Description.replace("`r`n", " ").replace("`t", "") # delete line breaks and tabs 
+						InboxRuleDescription                   = $sendTextMessageNotificationToDescription
 					}
 									
 					#Add object to an array
