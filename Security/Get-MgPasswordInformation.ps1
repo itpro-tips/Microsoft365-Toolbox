@@ -42,7 +42,7 @@ function Get-MgPasswordInformation {
             OnPremisesLastSyncDateTime           = $user.OnPremisesLastSyncDateTime
             OnPremisesSyncEnabled                = $user.OnPremisesSyncEnabled
             ForceChangePasswordNextSignIn        = $user.PasswordProfile.ForceChangePasswordNextSignIn
-            ForceChangePasswordNextSignInWithMfa = $user.PasswordProfile.ForceChangePasswordNextSignIn.ForceChangePasswordNextSignIn
+            ForceChangePasswordNextSignInWithMfa = $user.PasswordProfile.ForceChangePasswordNextSignInWithMfa
             PasswordPolicies                     = $user.PasswordPolicies
         }
     
