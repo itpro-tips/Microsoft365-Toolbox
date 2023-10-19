@@ -33,6 +33,7 @@ V1.0, 17 august 2020 - Initial version
 V1.1, 05 april 2022 - Add alternate email, Phone number, PIN
 V1.2, 27 april april 2022 - Add GroupNameUsedInConditionnalAccess to check if user is member of group used in conditionnal access
 V1.3, 2 may 2022 - Add Partners links
+v1.4 october 2022
 
 /!\
 /!\
@@ -75,6 +76,9 @@ function Get-MsolRoleReport {
         $msolRoles = Get-MsolRole
     }
 
+    Write-Warning "Warning 1: This script is not working anymore after december 2022 due to Microsoft deprecation of MSOL and Azure AD modules. More information on https://office365itpros.com/2022/03/17/azure-ad-powershell-deprecation/"
+    Write-Warning "Warning 2: This script use MSOLService so it doesn't return assingment via PIM (Privileged Identity Management). The results can be not accurate."
+    
     # Use MsolService because returns more role and allows MFA status 
     [System.Collections.Generic.List[PSObject]]$rolesMembers = @()
 

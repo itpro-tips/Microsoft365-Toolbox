@@ -1,3 +1,5 @@
+# To see in the audit logs if the password was changed by user ot by Azure AD Connect, we can use my own script:
+#Get-MgAuditLogs -Activity 'Change user password' | Where-Object InitiatedBy -like '*@domain*'
 function Get-MgPasswordInformation {
     [CmdletBinding()]
     param (
@@ -38,8 +40,8 @@ function Get-MgPasswordInformation {
     foreach ($user in $users) {
         $object = [PSCustomObject][ordered]@{
             UserPrincipalName                    = $user.UserPrincipalName
-            LastPasswordChangeDateTime           = $user.LastPasswordChangeDateTime
-            OnPremisesLastSyncDateTime           = $user.OnPremisesLastSyncDateTime
+            LastPasswordChangeDateTimeUTC        = $user.LastPasswordChangeDateTime
+            OnPremisesLastSyncDateTimeUTC        = $user.OnPremisesLastSyncDateTime
             OnPremisesSyncEnabled                = $user.OnPremisesSyncEnabled
             ForceChangePasswordNextSignIn        = $user.PasswordProfile.ForceChangePasswordNextSignIn
             ForceChangePasswordNextSignInWithMfa = $user.PasswordProfile.ForceChangePasswordNextSignInWithMfa
