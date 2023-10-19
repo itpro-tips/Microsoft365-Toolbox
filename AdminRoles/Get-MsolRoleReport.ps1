@@ -76,7 +76,7 @@ function Get-MsolRoleReport {
         $msolRoles = Get-MsolRole
     }
 
-    Write-Warning "Warning 1: This script is not working anymore after december 2022 due to Microsoft deprecation of MSOL and Azure AD modules. More information on https://office365itpros.com/2022/03/17/azure-ad-powershell-deprecation/"
+    Write-Warning "Warning 1: This script script may no longer work after June 2023 due to Microsoft deprecation of MSOL and Azure AD modules. More information on https://office365itpros.com/2023/04/04/azure-ad-powershell-deprecation-2/"
     Write-Warning "Warning 2: This script use MSOLService so it doesn't return assingment via PIM (Privileged Identity Management). The results can be not accurate."
     
     # Use MsolService because returns more role and allows MFA status 
