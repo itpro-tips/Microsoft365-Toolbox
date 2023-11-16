@@ -1,3 +1,5 @@
+# article : https://itpro-tips.com/get-azure-ad-saml-certificate-details/
+
 try {
     Import-Module 'Microsoft.Graph.Applications' -ErrorAction Stop -ErrorVariable mgGraphAppsMissing
     Import-Module 'Microsoft.Graph.Identity.SignIns' -ErrorAction Stop -ErrorVariable mgGraphIdentitySignInsMissing
