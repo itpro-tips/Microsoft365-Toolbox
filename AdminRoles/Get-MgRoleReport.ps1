@@ -101,6 +101,7 @@ function Get-MgRoleReport {
             "IsBuiltIn"            = $mgRole.RoleDefinitionExtended.isBuiltIn
             "RoleTemplate"         = $mgRole.RoleDefinitionExtended.templateId
             DirectMember           = $true
+            Recommendations        = 'Check if the user has alternate email or alternate phone number on Microsoft Entra ID'
         }
 
         $rolesMembers.Add($object)
@@ -127,46 +128,20 @@ function Get-MgRoleReport {
                 $rolesMembers.Add($object)
             }
         }
-        
-        <#
-        try {
-            $roleMembers = [array](Get-MgRoleManagementDirectoryRoleAssignment -Filter "roleDefinitionId eq '$($mgRole.Id)'")
-        }
-        catch {
-            Write-Warning "Role $($mgRole.DisplayName) search error: $($_.Exception.Message)"
-        } 
-
-        # Add green color if member found into the role
-        if($null -eq $rolesMembers -and $IncludeEmptyRoles.IsPresent) {
-            Write-Host -ForegroundColor Cyan "Role $($mgRole.DisplayName) - Member found: $($roleMembers.count)"
-        }
-        elseif ($roleMembers.count -gt 0) {
-            Write-Host -ForegroundColor Green "Role $($mgRole.DisplayName) - Member(s) found: $($roleMembers.count)"
-            $object = [PSCustomObject][ordered]@{
-                'Role'                                            = $msolRole.Name
-                'RoleDescription'                                 = $msolRole.Description
-
-            $rolesMembers.Add($object)
-        }
-        else {
-            Write-Host -ForegroundColor Cyan "Role $($mgRole.DisplayName) - Member found: $($roleMembers.count)"
-        }
-        #>
     }
 
     $object = [PSCustomObject] [ordered]@{
-        $object = [PSCustomObject][ordered]@{
-            Principal              = $member.AdditionalProperties.userPrincipalName
-            "PrincipalDisplayName" = $member.AdditionalProperties.displayName
-            "PrincipalType"        = $member
-            "AssignedRole"         = $mgRole.RoleDefinitionExtended.displayName
-            "AssignedRoleScope"    = $mgRole.directoryScopeId
-            "AssignmentType"       = if ($mgRole.status -eq 'Provisioned') { 'Eligible' } else { 'Permanent' }
-            "IsBuiltIn"            = $mgRole.RoleDefinitionExtended.isBuiltIn
-            "RoleTemplate"         = $mgRole.RoleDefinitionExtended.templateId
-            DirectMember           = $false
-            Recommendations        = 'Please check this URL to identify if you have partner with admin roles https://admin.microsoft.com/AdminPortal/Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
-        }
+        Principal              = 'Partners'
+        "PrincipalDisplayName" = 'Partners'
+        "PrincipalType"        = 'Partners'
+        "AssignedRole"         = 'Partners'
+        "AssignedRoleScope"    = 'Partners'
+        "AssignmentType"       = 'Partners'
+        "IsBuiltIn"            = 'Partners'
+        "RoleTemplate"         = 'Partners'
+        DirectMember           = ''
+        Recommendations        = 'Please check this URL to identify if you have partner with admin roles https://admin.microsoft.com/AdminPortal/Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
+        
     }
     
     $rolesMembers.Add($object)
