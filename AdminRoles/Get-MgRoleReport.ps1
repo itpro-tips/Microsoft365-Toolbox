@@ -21,7 +21,6 @@ Get-MGRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_a
 
 .LINK
 https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes/
-https://github.com/itpro-tips/Microsoft365-Toolbox/blob/master/AdminRoles/Get-MGRoleReport.ps1
 
 .NOTES
 Written by Bastien Perez (Clidsys.com - ITPro-Tips.com)
@@ -29,6 +28,7 @@ For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 
 Version history:
 V1.0 19 october 2023
+V1.1 01 december 2023
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
@@ -121,13 +121,14 @@ function Get-MgRoleReport {
                     "IsBuiltIn"            = $mgRole.RoleDefinitionExtended.isBuiltIn
                     "RoleTemplate"         = $mgRole.RoleDefinitionExtended.templateId
                     DirectMember           = $false
+                    Recommendations        = 'Check if the user has alternate email or alternate phone number on Microsoft Entra ID'
                 }
 
                 $rolesMembers.Add($object)
             }
         }
         
-            <#
+        <#
         try {
             $roleMembers = [array](Get-MgRoleManagementDirectoryRoleAssignment -Filter "roleDefinitionId eq '$($mgRole.Id)'")
         }
@@ -151,7 +152,24 @@ function Get-MgRoleReport {
             Write-Host -ForegroundColor Cyan "Role $($mgRole.DisplayName) - Member found: $($roleMembers.count)"
         }
         #>
-        }
-
-        return $rolesMembers
     }
+
+    $object = [PSCustomObject] [ordered]@{
+        $object = [PSCustomObject][ordered]@{
+            Principal              = $member.AdditionalProperties.userPrincipalName
+            "PrincipalDisplayName" = $member.AdditionalProperties.displayName
+            "PrincipalType"        = $member
+            "AssignedRole"         = $mgRole.RoleDefinitionExtended.displayName
+            "AssignedRoleScope"    = $mgRole.directoryScopeId
+            "AssignmentType"       = if ($mgRole.status -eq 'Provisioned') { 'Eligible' } else { 'Permanent' }
+            "IsBuiltIn"            = $mgRole.RoleDefinitionExtended.isBuiltIn
+            "RoleTemplate"         = $mgRole.RoleDefinitionExtended.templateId
+            DirectMember           = $false
+            Recommendations        = 'Please check this URL to identify if you have partner with admin roles https://admin.microsoft.com/AdminPortal/Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
+        }
+    }
+    
+    $rolesMembers.Add($object)
+
+    return $rolesMembers
+}
