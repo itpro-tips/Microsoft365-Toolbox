@@ -11,7 +11,8 @@ function Get-MailAutoForwarded {
     param (
         [Parameter()]
         [string]$SenderAddress,
-        [swtich]$FailedOnly
+        [switch]$FailedOnly,
+        [int]$Days = 10
     )
 
     $remoteDomains = Get-RemoteDomain
@@ -40,30 +41,32 @@ function Get-MailAutoForwarded {
         }
     }
 
-    Write-Host 'Get all messages...' -ForegroundColor green
+    Write-Host 'Get messages from the last' $days 'days' -ForegroundColor Cyan
+
     #The PageSize parameter specifies the maximum number of entries per page. Valid input for this parameter is an integer between 1 and 5000. The default value is 1000.
     if ($SenderAddress) {
         if ($FailedOnly) {   
-            $messages = Get-MessageTrace -Status Failed -StartDate (Get-Date).AddDays(-5) -EndDate (Get-Date) -PageSize 5000 -SenderAddress $SenderAddress
+            $messages = Get-MessageTrace -Status Failed -StartDate (Get-Date).AddDays(-$days) -EndDate (Get-Date) -PageSize 5000 -SenderAddress $SenderAddress
         }
         else {
-            $messages = Get-MessageTrace -StartDate (Get-Date).AddDays(-5) -EndDate (Get-Date) -PageSize 5000 -SenderAddress $SenderAddress
+            $messages = Get-MessageTrace -StartDate (Get-Date).AddDays(-$days) -EndDate (Get-Date) -PageSize 5000 -SenderAddress $SenderAddress
         }
     }
     else {
         if ($FailedOnly) {   
-            $messages = Get-MessageTrace -Status Failed -StartDate (Get-Date).AddDays(-5) -EndDate (Get-Date) -PageSize 5000 
+            $messages = Get-MessageTrace -Status Failed -StartDate (Get-Date).AddDays(-$days) -EndDate (Get-Date) -PageSize 5000 
         }
         else {
-            $messages = Get-MessageTrace -StartDate (Get-Date).AddDays(-5) -EndDate (Get-Date) -PageSize 5000
+            $messages = Get-MessageTrace -StartDate (Get-Date).AddDays(-$days) -EndDate (Get-Date) -PageSize 5000
         }
     }
     
     Write-Host "Search in the $($messages.count) messages to find autoforward" -ForegroundColor green
 
     #only one Get-MessageTraceDetail for all because it's time consuming (12 seconds -> 8 seconds for about 20 messages!)
-    $messagesAutoForwarded = $messages | Get-MessageTraceDetail | Where-Object { $_.Detail -like '*LED=250 2.1.5 RESOLVER.MSGTYPE.AF; handled AutoForward addressed to external recipient*' -or $_.Detail -like '*LED=250 2.1.5 RESOLVER.FWD.Forwarded; recipient forward*' }
-
+    #$messagesAutoForwarded = $messages | Get-MessageTraceDetail | Where-Object { $_.Detail -like '*LED=250 2.1.5 RESOLVER.MSGTYPE.AF; handled AutoForward addressed to external recipient*' -or $_.Detail -like '*LED=250 2.1.5 RESOLVER.FWD.Forwarded; recipient forward*' }
+    $messagesAutoForwarded = $messages | ForEach-Object {Get-MessageTraceDetail -RecipientAddress $_.RecipientAddress -MessageTraceId $_.MessageTraceId | Where-Object { $_.Detail -like '*LED=250 2.1.5 RESOLVER.MSGTYPE.AF; handled AutoForward addressed to external recipient*' -or $_.Detail -like '*LED=250 2.1.5 RESOLVER.FWD.Forwarded; recipient forward*' }}
+    
     [System.Collections.Generic.List[PSObject]]$emailsWithAutoForward = @()
 
     foreach ($messageAF in $messagesAutoForwarded) {
