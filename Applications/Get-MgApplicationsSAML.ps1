@@ -1,8 +1,9 @@
 # article : https://itpro-tips.com/get-azure-ad-saml-certificate-details/
 
 try {
-    Import-Module 'Microsoft.Graph.Applications' -ErrorAction Stop -ErrorVariable mgGraphAppsMissing
-    Import-Module 'Microsoft.Graph.Identity.SignIns' -ErrorAction Stop -ErrorVariable mgGraphIdentitySignInsMissing
+    # At the date of writing (december 2023), PreferredTokenSigningKeyEndDateTime parameter is only on Beta profile
+    Import-Module 'Microsoft.Graph.Beta.Applications' -ErrorAction Stop -ErrorVariable mgGraphAppsMissing
+    Import-Module 'Microsoft.Graph.Beta.Identity.SignIns' -ErrorAction Stop -ErrorVariable mgGraphIdentitySignInsMissing
 }
 catch {
     if ($mgGraphAppsMissing) {
@@ -16,11 +17,8 @@ catch {
 
 Connect-MgGraph -Scopes 'Application.Read.All'
 
-# At the date of writing (23 february 2023), PreferredTokenSigningKeyEndDateTime parameter is only on Beta profile
-Select-MgProfile -Name beta
-
 [System.Collections.Generic.List[PSObject]]$samlApplicationsArray = @()
-$samlApplications = Get-MgServicePrincipal -Filter "PreferredSingleSignOnMode eq 'saml'"
+$samlApplications = Get-MgBetaServicePrincipal -Filter "PreferredSingleSignOnMode eq 'saml'"
 
 foreach ($samlApp in $samlApplications) {
     $object = [PSCustomObject][ordered]@{

@@ -31,17 +31,17 @@ Set-PSRepository -Name PSGallery -InstallationPolicy trusted -ErrorAction Silent
 
 # Install modules from PSGallery
 $modules = @(
+    # Microsoft Graph will replace AzureAD and MSOnline by March, 30 2024 https://techcommunity.microsoft.com/t5/microsoft-entra-blog/important-azure-ad-graph-retirement-and-powershell-module/ba-p/3848270
     'PowershellGet',
-    'AzureADPreview',
-    'MSOnline',
+    'Microsoft.Graph'
+    'Microsoft.Graph.Beta',
+    'ExchangeOnlineManagement',
     'MicrosoftTeams',
     'Microsoft.Graph.Intune',
-    #'MicrosoftStaffHub',
-    'ExchangeOnlineManagement',
     'Microsoft.Online.SharePoint.PowerShell',
     'PnP.PowerShell',
-    # Microsoft Graph will replace AzureAD and MSOnline by december 2022 https://office365itpros.com/2021/06/03/microsoft-graph-sdk-powershell-future/
-    'Microsoft.Graph'
+    'AzureADPreview',
+    'MSOnline'
 )
 
 if ($AdvancedModules) {
