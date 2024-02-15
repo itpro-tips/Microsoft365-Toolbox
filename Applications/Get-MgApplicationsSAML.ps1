@@ -1,5 +1,5 @@
 # article : https://itpro-tips.com/get-azure-ad-saml-certificate-details/
-
+# the information about the SAML applications clams is not available in the Microsoft Graph API v1 but in https://main.iam.ad.ext.azure.com/api/ApplicationSso/<service-principal-id>/FederatedSsoV2 so we don't get them
 try {
     # At the date of writing (december 2023), PreferredTokenSigningKeyEndDateTime parameter is only on Beta profile
     Import-Module 'Microsoft.Graph.Beta.Applications' -ErrorAction Stop -ErrorVariable mgGraphAppsMissing
