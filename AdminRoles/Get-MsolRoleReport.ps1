@@ -76,9 +76,7 @@ function Get-MsolRoleReport {
         $msolRoles = Get-MsolRole
     }
 
-    Write-Warning "Warning 1: This script script may no longer work after June 2023 due to Microsoft deprecation of MSOL and Azure AD modules. More information on https://office365itpros.com/2023/04/04/azure-ad-powershell-deprecation-2/"
-    Write-Warning "Warning 2: This script use MSOLService so it doesn't return assingment via PIM (Privileged Identity Management). The results can be not accurate."
-    Write-Warning "Warning 2: This script use MSOLService so it doesn't return assingment via PIM (Privileged Identity Management). The results can be not accurate. Prefer using https://github.com/itpro-tips/Microsoft365-Toolbox/blob/master/AdminRoles/Get-MgRoleReport.ps1"
+    Write-Warning "Warning 1: This script script may no longer work after June 2023 due to Microsoft deprecation of MSOL and Azure AD modules. More information on https://office365itpros.com/2023/04/04/azure-ad-powershell-deprecation-2/"    Write-Warning "Warning 2: This script use MSOLService so it doesn't return assingment via PIM (Privileged Identity Management). The results can be not accurate. Prefer using https://github.com/itpro-tips/Microsoft365-Toolbox/blob/master/AdminRoles/Get-MgRoleReport.ps1"
     
     # Use MsolService because returns more role and allows MFA status 
     [System.Collections.Generic.List[PSObject]]$rolesMembers = @()
