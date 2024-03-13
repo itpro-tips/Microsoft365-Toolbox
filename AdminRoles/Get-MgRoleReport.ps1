@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Get-MGRoleReport.ps1 - Reports on Microsoft Entra ID (Azure AD) roles
+Get-MgRoleReport.ps1 - Reports on Microsoft Entra ID (Azure AD) roles
 
 .DESCRIPTION 
-By default, the report contains only the groups with members.
+By default, the report contains only the roles with members.
 To get all the role, included empty roles, add -IncludeEmptyRoles $true
 
 .OUTPUTS
@@ -11,16 +11,16 @@ The report is output to an array contained all the audit logs found.
 To export in a csv, do Get-MsolRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRoles.csv" -Encoding UTF8
 
 .EXAMPLE
-Get-MGRoleReport
+Get-MgRoleReport
 
 .EXAMPLE
-Get-MGRoleReport -IncludeEmptyRoles $true
+Get-MgRoleReport -IncludeEmptyRoles $true
 
 .EXAMPLE
-Get-MGRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRoles.csv" -Encoding UTF8
+Get-MgRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRoles.csv" -Encoding UTF8
 
 .LINK
-https://itpro-tips.com/2020/get-the-office-365-admin-roles-and-track-the-changes/
+https://itpro-tips.com/get-the-office-365-admin-roles-and-track-the-changes/
 
 .NOTES
 Written by Bastien Perez (Clidsys.com - ITPro-Tips.com)
@@ -29,6 +29,7 @@ For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 Version history:
 V1.0 19 october 2023
 V1.1 01 december 2023
+V1.2 13 march 2024
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
