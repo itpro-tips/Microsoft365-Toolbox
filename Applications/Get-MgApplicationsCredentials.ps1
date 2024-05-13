@@ -12,7 +12,7 @@ catch {
     return
 }
 
-Connect-MgGraph -Scopes 'Application.Read.All'
+Connect-MgGraph -Scopes 'Application.Read.All' -NoWelcome 
 
 [System.Collections.Generic.List[PSObject]]$credentialsArray = @()
 

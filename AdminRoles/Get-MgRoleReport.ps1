@@ -8,7 +8,7 @@ To get all the role, included empty roles, add -IncludeEmptyRoles $true
 
 .OUTPUTS
 The report is output to an array contained all the audit logs found.
-To export in a csv, do Get-MsolRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRoles.csv" -Encoding UTF8
+To export in a csv, do Get-MgRoleReport | Export-CSV -NoTypeInformation "$(Get-Date -Format yyyyMMdd)_adminRoles.csv" -Encoding UTF8
 
 .EXAMPLE
 Get-MgRoleReport
@@ -53,12 +53,17 @@ function Get-MgRoleReport {
         'Microsoft.Graph.Authentication'
         'Microsoft.Graph.Identity.Governance'
     )
-    try {
-        #Import-Module 
-    }
-    catch {
-        Write-Warning "First, install module $module"
-        return
+
+    Write-Warning 'You need to have the following roles to run this script: Directory.Read.All'
+    
+    foreach ($module in $modules) {
+        try {
+            Import-Module $module -ErrorAction Stop 
+        }
+        catch {
+            Write-Warning "First, install module $module"
+            return
+        }
     }
 
     try {
@@ -72,7 +77,6 @@ function Get-MgRoleReport {
         Write-Warning $($_.Exception.Message)   
     }   
     
-
     foreach ($mgRole in $mgRoles) {
         Add-Member -InputObject $mgRole -MemberType NoteProperty -Name RoleDefinitionExtended -Value ($mgRolesDefinition | Where-Object { $_.id -eq $mgRole.id }).roleDefinition 
     } # Add the role definition to the object
