@@ -30,6 +30,7 @@ Version history:
 V1.0 19 october 2023
 V1.1 01 december 2023
 V1.2 13 march 2024
+v1.3 15 may 2024
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
@@ -43,18 +44,22 @@ DEALINGS IN THE SOFTWARE.
 function Get-MgRoleReport {
     [CmdletBinding()]
     param (
+        [Parameter(Mandatory = $false)]
         [switch]$IncludeEmptyRoles,
+        [Parameter(Mandatory = $false)]
         [String]$GroupNameUsedInConditionnalAccess,
+        [Parameter(Mandatory = $false)]
         [switch]$FullDetails,
-        [boolean]$IncludePIMEligibleAssignments = $true
+        [Parameter(Mandatory = $false)]
+        [boolean]$IncludePIMEligibleAssignments = $true,
+        [Parameter(Mandatory = $false)]
+        [switch]$ForceNewToken
     )
 
     $modules = @(
         'Microsoft.Graph.Authentication'
         'Microsoft.Graph.Identity.Governance'
     )
-
-    Write-Warning 'You need to have the following roles to run this script: Directory.Read.All'
     
     foreach ($module in $modules) {
         try {
@@ -65,6 +70,13 @@ function Get-MgRoleReport {
             return
         }
     }
+
+    if ($ForceNewToken) {
+        $null = Disconnect-MgGraph -ErrorAction SilentlyContinue
+    }
+
+    Write-Host -ForegroundColor Cyan 'Connecting to Microsoft Graph. Scopes: Directory.Read.All'
+    $null = Connect-MgGraph -Scopes 'Directory.Read.All' -NoWelcome
 
     try {
         #$mgRoles = Get-MgRoleManagementDirectoryRoleDefinition -ErrorAction Stop
@@ -148,8 +160,27 @@ function Get-MgRoleReport {
         Recommendations        = 'Please check this URL to identify if you have partner with admin roles https://admin.microsoft.com/AdminPortal/Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
         
     }
+
+    
     
     $rolesMembers.Add($object)
+
+    #foreach user, we check if the user is global administrator. If global administrator, we add a new parameter to the object recommandationRole to tell the other role is not useful
+    $globalAdminsHash = @{}
+    $rolesMembers | Where-Object { $_.AssignedRole -eq 'Global Administrator' } | ForEach-Object {
+        $globalAdminsHash[$_.Principal] = $true
+    }
+
+    $rolesMembers | ForEach-Object {
+        if ($globalAdminsHash.ContainsKey($_.Principal) -and $_.AssignedRole -ne 'Global Administrator') {
+            $_ | Add-Member -MemberType NoteProperty -Name 'RecommandationRole' -Value 'This user is Global Administrator. The other role(s) is/are not useful'
+        }
+        else {
+            $_ | Add-Member -MemberType NoteProperty -Name 'RecommandationRole' -Value ''
+        }
+    }
+
+    
 
     return $rolesMembers
 }
