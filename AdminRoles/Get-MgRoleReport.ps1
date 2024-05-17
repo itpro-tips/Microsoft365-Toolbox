@@ -159,9 +159,7 @@ function Get-MgRoleReport {
         DirectMember           = ''
         Recommendations        = 'Please check this URL to identify if you have partner with admin roles https://admin.microsoft.com/AdminPortal/Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
         
-    }
-
-    
+    }    
     
     $rolesMembers.Add($object)
 
