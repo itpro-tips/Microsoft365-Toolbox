@@ -41,3 +41,5 @@ foreach ($casMailbox in $casMailboxes) {
 
     $exoCasMailboxesArray.Add($object)
 }
+
+return $exoCasMailboxesArray
