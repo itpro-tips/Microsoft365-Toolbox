@@ -43,7 +43,23 @@ function Get-MailAutoForwarded {
 
     Write-Host 'Get messages from the last' $days 'days' -ForegroundColor Cyan
 
+    $params = @{}
+
+    $params.Add('StartDate', (Get-Date).AddDays(-$days))
+    $params.Add('EndDate', (Get-Date))
+
     #The PageSize parameter specifies the maximum number of entries per page. Valid input for this parameter is an integer between 1 and 5000. The default value is 1000.
+    $params.PageSize = 5000
+
+    if ($SenderAddress) {
+        $params.Add('SenderAddress', $SenderAddress)
+    }
+    if ($FailedOnly) {
+        $params.Add('FailedOnly', $FailedOnly)
+    }
+
+    $messages = Get-MessageTrace @params
+    <#
     if ($SenderAddress) {
         if ($FailedOnly) {   
             $messages = Get-MessageTrace -Status Failed -StartDate (Get-Date).AddDays(-$days) -EndDate (Get-Date) -PageSize 5000 -SenderAddress $SenderAddress
@@ -60,12 +76,13 @@ function Get-MailAutoForwarded {
             $messages = Get-MessageTrace -StartDate (Get-Date).AddDays(-$days) -EndDate (Get-Date) -PageSize 5000
         }
     }
+        #>
     
     Write-Host "Search in the $($messages.count) messages to find autoforward" -ForegroundColor green
 
     #only one Get-MessageTraceDetail for all because it's time consuming (12 seconds -> 8 seconds for about 20 messages!)
     #$messagesAutoForwarded = $messages | Get-MessageTraceDetail | Where-Object { $_.Detail -like '*LED=250 2.1.5 RESOLVER.MSGTYPE.AF; handled AutoForward addressed to external recipient*' -or $_.Detail -like '*LED=250 2.1.5 RESOLVER.FWD.Forwarded; recipient forward*' }
-    $messagesAutoForwarded = $messages | ForEach-Object {Get-MessageTraceDetail -RecipientAddress $_.RecipientAddress -MessageTraceId $_.MessageTraceId | Where-Object { $_.Detail -like '*LED=250 2.1.5 RESOLVER.MSGTYPE.AF; handled AutoForward addressed to external recipient*' -or $_.Detail -like '*LED=250 2.1.5 RESOLVER.FWD.Forwarded; recipient forward*' }}
+    $messagesAutoForwarded = $messages | ForEach-Object { Get-MessageTraceDetail -RecipientAddress $_.RecipientAddress -MessageTraceId $_.MessageTraceId | Where-Object { $_.Detail -like '*LED=250 2.1.5 RESOLVER.MSGTYPE.AF; handled AutoForward addressed to external recipient*' -or $_.Detail -like '*LED=250 2.1.5 RESOLVER.FWD.Forwarded; recipient forward*' } }
     
     [System.Collections.Generic.List[PSObject]]$emailsWithAutoForward = @()
 

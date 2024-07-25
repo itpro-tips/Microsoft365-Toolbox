@@ -335,7 +335,7 @@ Function Get-MailboxForwarding {
 			}
 
 			foreach ($inboxForwardRule in $inboxForwardRules) {
-				if ($forwardList.PrimarySMTPAddress -contains $mailbox.PrimarySmtpAddress) {
+				if ($forwardList.PrimarySMTPAddress -contains $mailbox.PrimarySmtpAddress -and ($forwardList.ForwardingAddress -ne '-' -or $forwardList.ForwardingSMTPAddress -ne '-')) {
 					$precedence = 'ForwardingAddress | ForwardingSMTPAddress is already set for this mailbox. They have a higher priority than inbox rules. This inbox rule will be ignored'
 				}
 				else {
