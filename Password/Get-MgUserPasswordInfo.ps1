@@ -1,5 +1,5 @@
-# To see in the audit logs if the password was changed by user ot by Azure AD Connect, we can use my own script:
-#Get-MgAuditLogs -Activity 'Change user password' | Where-Object InitiatedBy -like '*@domain*'
+																												
+																							  
 
 <#
 .SYNOPSIS
@@ -11,13 +11,20 @@
 .PARAMETER UserPrincipalName
     Specifies the user principal name(s) of the user(s) for which to retrieve password information.
     
+.PARAMETER PasswordPoliciesByDomainOnly
+    If specified, retrieves password policies for domains only, without retrieving individual user information.
+
 .EXAMPLE
     Get-MgUserPasswordInfo
     Retrieves password information for all users and outputs it (default behavior).
 
 .EXAMPLE
     Get-MgUserPasswordInfo -UserPrincipalName xxx@domain.com
-    Retrieves password information for the specified user and outputs it
+    Retrieves password information for the specified user and outputs it.
+
+.EXAMPLE
+    Get-MgUserPasswordInfo -PasswordPoliciesByDomainOnly
+    Retrieves password policies for all domains only.
 
 .OUTPUTS
     PSCustomObject
@@ -37,6 +44,7 @@
     The script assumes that the necessary authentication to Microsoft Graph has already been handled with the Connect-MgGraph function.
     Connect-MgGraph -Scopes 'User.Read.All', 'Domain.Read.All'
 #>
+
 function Get-MgUserPasswordInfo {
     [CmdletBinding()]
     param (
@@ -46,75 +54,107 @@ function Get-MgUserPasswordInfo {
         [switch]$PasswordPoliciesByDomainOnly
     )
     
+    # Import required modules
     $modules = @(
-        'Microsoft.Graph.Authentication'
-        'Microsoft.Graph.Users'
+        'Microsoft.Graph.Authentication',
+        'Microsoft.Graph.Users',
         'Microsoft.Graph.Identity.DirectoryManagement'
     )
     
-
     foreach ($module in $modules) {
         try {
-            $null = Get-InstalledModule $module -ErrorAction Stop
+            $null = Import-Module $module -ErrorAction Stop
         }
         catch {
             Write-Warning "Please install $module first"
             return
         }
+											   
     }
 
-    [System.Collections.Generic.List[PSObject]]$domainPasswordPolicies = @()
-    [System.Collections.Generic.List[PSObject]]$passwordsInfoArray = @()
+    function Get-DomainPasswordPolicies {
+        Write-Host -ForegroundColor Cyan 'Retrieving password policies for all domains'
+        $domains = Get-MgDomain -All
+        $domainPasswordPolicies = [System.Collections.Generic.List[PSObject]]$domainPasswordPolicies = @()
 
-    Write-Host -ForegroundColor Cyan 'Retrieving password policies for all domains'
-    $domains = Get-MgDomain -All
-    
+        foreach ($domain in $domains) {
+	
+            $validityPeriod = if ($domain.PasswordValidityPeriodInDays -eq '2147483647') { 
+                '2147483647 (Password never expire)' 
+            }
+            else { 
+			  
+                $domain.PasswordValidityPeriodInDays 
+            }
+            
+            $object = [PSCustomObject][ordered]@{
+                DomainName                       = $domain.ID
+                AuthenticationType               = $domain.AuthenticationType
+                PasswordValidityPeriod           = $validityPeriod
+                PasswordValidityInheritedFrom    = $null
+                PasswordNotificationWindowInDays = $domain.PasswordNotificationWindowInDays
+            }
 
-    foreach ($domain in $domains) {
-    
-        if ($domain.PasswordValidityPeriodInDays -eq '2147483647') {
-            $validityPeriod = '2147483647 (Password never expire)'
-        }
-        else {
-            $validityPeriod = $domain.PasswordValidityPeriodInDays
-        }
-        
-        $object = [PSCustomObject][ordered]@{
-            Domain             = $domain.ID
-            AuthenticationType = $domain.AuthenticationType
-            NotificationDays   = $domain.PasswordNotificationWindowInDays
-            ValidityPeriod     = $validityPeriod
-        }
+            $domainPasswordPolicies.Add($object)
+        }		   
 
-        $domainPasswordPolicies.Add($object)
+        # Inherit password policies
+        foreach ($domain in $domainPasswordPolicies) {
+            $found = $false
+            
+            foreach ($policy in $domainPasswordPolicies) {
+                if ($domain.DomainName.EndsWith($policy.DomainName) -and $domain.DomainName -ne $policy.DomainName -and -not $found) {
+                    $domain.PasswordNotificationWindowInDays = $policy.PasswordNotificationWindowInDays
+                    $domain.PasswordValidityPeriod = $policy.PasswordValidityPeriod
+                    $domain.PasswordValidityInheritedFrom = $policy.DomainName
+
+                    $found = $true
+                }
+            }
+        }
+        return $domainPasswordPolicies
     }
 
-    if ($PasswordPoliciesByDomainOnly.IsPresent) {
+    # Retrieve domain password policies
+    $domainPasswordPolicies = Get-DomainPasswordPolicies
+
+    if ($PasswordPoliciesByDomainOnly) {
         Write-Host -ForegroundColor Cyan "Note that if you have some federated domains, they don't have password policies because authentication is handled by another IDP (Identity Provider)"
 
         return $domainPasswordPolicies
     }
 
+    # Retrieve user password information
     if ($UserPrincipalName) {
-        [System.Collections.Generic.List[PSObject]]$users = @()
-        
-        Write-Host -ForegroundColor Cyan "Retrieving password information for $($userprincipalname.count) user(s)"
-        
-        foreach ($upn in $UserPrincipalName) {
-            # don't know if a user can have more than one password policy
-            $user = Get-MgUser -UserId $upn -Property UserPrincipalName, LastPasswordChangeDateTime, OnPremisesLastSyncDateTime, OnPremisesSyncEnabled, PasswordProfile, PasswordPolicies, @{Name = 'PasswordPolicies'; Expression = { $_.PasswordPolicies -join '|' } }
+        Write-Host -ForegroundColor Cyan "Retrieving password information for $($UserPrincipalName.Count) user(s)"
+        [System.Collections.Generic.List[PSObject]]$usersList = @()
+        foreach ($upn in $UserPrincipalName) {												 
+            $user = Get-MgUser -UserId $upn -Property UserPrincipalName, LastPasswordChangeDateTime, OnPremisesLastSyncDateTime, OnPremisesSyncEnabled, PasswordProfile, PasswordPolicies
 
-            $users.Add($user)
+            $usersList.Add($user)
         }
     }
     else {
+		  
         Write-Host -ForegroundColor Cyan 'Retrieving password information for all users'
-        
-        $users = [array](Get-MgUser -All -Property UserPrincipalName, LastPasswordChangeDateTime, OnPremisesLastSyncDateTime, OnPremisesSyncEnabled, PasswordProfile, PasswordPolicies, @{Name = 'PasswordPolicies'; Expression = { $_.PasswordPolicies -join '|' } })
+        $usersList = Get-MgUser -All -Property UserPrincipalName, LastPasswordChangeDateTime, OnPremisesLastSyncDateTime, OnPremisesSyncEnabled, PasswordProfile, PasswordPolicies
     }
-   
-    foreach ($user in $users) {
+
+    [System.Collections.Generic.List[PSObject]]$passwordsInfoArray = @()
+
+    foreach ($user in $usersList) {
         $userDomain = $user.UserPrincipalName.Split('@')[1]
+        $userDomainPolicy = $domainPasswordPolicies | Where-Object { $_.DomainName -eq $userDomain }
+
+        $passwordExpired = $false 
+
+        if ($userDomainPolicy.PasswordValidityPeriod -ne '2147483647 (Password never expire)') {
+
+            if ($user.LastPasswordChangeDateTime -lt (Get-Date).AddDays(-$userDomainPolicy.PasswordValidityPeriod)) { 
+                $passwordExpired = $true 
+            }
+        }
+
         $object = [PSCustomObject][ordered]@{
             UserPrincipalName                    = $user.UserPrincipalName
             LastPasswordChangeDateTimeUTC        = $user.LastPasswordChangeDateTime
@@ -124,12 +164,15 @@ function Get-MgUserPasswordInfo {
             ForceChangePasswordNextSignInWithMfa = $user.PasswordProfile.ForceChangePasswordNextSignInWithMfa
             PasswordPolicies                     = $user.PasswordPolicies
             Domain                               = $userDomain
-            PasswordNotificationWindowInDays     = ($domainPasswordPolicies | Where-Object Domain -eq $userDomain).NotificationDays
-            PasswordValidityPeriodInDays         = ($domainPasswordPolicies | Where-Object Domain -eq $userDomain).ValidityPeriod
+            PasswordValidityInheritedFrom        = $userDomainPolicy.PasswordValidityInheritedFrom
+            PasswordValidityPeriodInDays         = $userDomainPolicy.PasswordValidityPeriod
+            PasswordNotificationWindowInDays     = $userDomainPolicy.PasswordNotificationWindowInDays
+            PasswordExpired                      = $passwordExpired
+
         }
     
         $passwordsInfoArray.Add($object)
     }
 
     return $passwordsInfoArray
-} 
+}
