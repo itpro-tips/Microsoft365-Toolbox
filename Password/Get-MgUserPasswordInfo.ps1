@@ -1,6 +1,3 @@
-																												
-																							  
-
 <#
 .SYNOPSIS
     Retrieves and processes user password information from Microsoft Graph and get information about the user's password, such as the last password change date, on-premises sync status, and password policies.
