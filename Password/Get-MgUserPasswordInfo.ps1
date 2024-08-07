@@ -106,7 +106,7 @@ function Get-MgUserPasswordInfo {
                 if ($domain.DomainName.EndsWith($policy.DomainName) -and $domain.DomainName -ne $policy.DomainName -and -not $found) {
                     $domain.PasswordNotificationWindowInDays = $policy.PasswordNotificationWindowInDays
                     $domain.PasswordValidityPeriod = $policy.PasswordValidityPeriod
-                    $domain.PasswordValidityInheritedFrom = $policy.DomainName
+                    $domain.PasswordValidityInheritedFrom = "$($policy.DomainName) domain"
 
                     $found = $true
                 }
@@ -148,6 +148,11 @@ function Get-MgUserPasswordInfo {
 
         $passwordExpired = $false 
 
+        if ($user.PasswordPolicies -eq 'DisablePasswordExpiration') {
+            $userDomainPolicy.PasswordValidityPeriod = '2147483647 (Password never expire)'
+            $userDomainPolicy.PasswordValidityInheritedFrom = 'User password policy'
+        }
+
         if ($userDomainPolicy.PasswordValidityPeriod -ne '2147483647 (Password never expire)') {
 
             if ($user.LastPasswordChangeDateTime -lt (Get-Date).AddDays(-$userDomainPolicy.PasswordValidityPeriod)) { 
@@ -167,8 +172,8 @@ function Get-MgUserPasswordInfo {
             PasswordValidityInheritedFrom        = $userDomainPolicy.PasswordValidityInheritedFrom
             PasswordValidityPeriodInDays         = $userDomainPolicy.PasswordValidityPeriod
             PasswordNotificationWindowInDays     = $userDomainPolicy.PasswordNotificationWindowInDays
+            PasswordNextChangeDateTimeUTC        = if ($userDomainPolicy.PasswordValidityPeriod -ne '2147483647 (Password never expire)') { $user.LastPasswordChangeDateTime.AddDays($userDomainPolicy.PasswordValidityPeriod) }else {}
             PasswordExpired                      = $passwordExpired
-
         }
     
         $passwordsInfoArray.Add($object)
