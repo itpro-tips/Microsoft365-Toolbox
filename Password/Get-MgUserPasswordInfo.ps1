@@ -65,8 +65,7 @@ function Get-MgUserPasswordInfo {
         catch {
             Write-Warning "Please install $module first"
             return
-        }
-											   
+        }							   
     }
 
     function Get-DomainPasswordPolicies {

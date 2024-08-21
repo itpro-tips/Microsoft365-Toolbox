@@ -7,11 +7,10 @@
 # Add forwardWorks for inbox rules
 # Add forwardWorks if RemoteDomain enable
 
-Function Get-MailboxForwarding {
+function Get-MailboxForwarding {
 
 	[CmdletBinding()] 
-	Param 
-	( 
+	param ( 
 		[Parameter(Mandatory = $false)] 
 		[ValidateNotNullOrEmpty()] 
 		[string[]]$Mailboxes,
@@ -68,11 +67,22 @@ Function Get-MailboxForwarding {
 
 		foreach ($outboundSpamPolicy in $outboundSpamPolicies) {
 		
-			Write-Host "OutboundSpamPolicy '$($outboundSpamPolicy.Name)' AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor Cyan
+			$state = (Get-HostedOutboundSpamFilterRule | Where-Object { $_.HostedOutboundSpamFilterPolicy -eq $outboundSpamPolicy.Name }).State
+
+			if ($state -eq 'Enabled') {
+				$prefix = ''
+				$color = 'Cyan'
+			}
+			else {
+				$prefix = '[NOT ENABLED] '
+				$color = 'Gray'
+			}
+
+			Write-Host "$prefix`OutboundSpamPolicy '$($outboundSpamPolicy.Name)' (Enabled:$($outboundSpamPolicy.Enabled)) AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor $color
 		
 			$autoForwardMode = $outboundSpamPolicy.AutoForwardingMode
 		
-			if ($autoForwardMode -eq 'Automatic') {
+			if ($autoForwardMode -eq 'Automatic' -and $state -eq 'Enabled') {
 				Write-Host "Careful, the value 'Automatic is now the same as AutoForwardEnable=Off, means autoForward is disabled even if the Remote domain(s) are configured with AutoForwardEnable = `$true
 		Sources:
 		https://office365itpros.com/2020/11/12/microsoft-clamps-down-mail-forwarding-exchange-online/
@@ -87,7 +97,7 @@ Function Get-MailboxForwarding {
 
 	$hashRecipients = @{}
 	
-	Write-Verbose  'Get Exchange recipients'
+	Write-Host -ForegroundColor Cyan 'Get all Exchange recipients'
 	
 	# Get all recipients, needed for forwardingAddress
 	if (-not $ExchangeOnPremise) {
@@ -105,10 +115,13 @@ Function Get-MailboxForwarding {
 	# Get-LegacyExchangeDN, needed for inbox rules. We can also use name or ID but legacyExchangeDN is more reliable
 	# Get-EXORecipient does not contain LegacyExchangeDN property so we need to get it from Get-EXOMailbox / Get-DistributionGroup and Get-UnifiedGroup
 	if (-not $ExchangeOnPremise) {
-	
+		<#
 		Get-ExoMailbox -ResultSize Unlimited -Properties LegacyExchangeDN | ForEach-Object {
 			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
 		}
+		#>
+
+		$mbxs = Get-EXOMailbox -ResultSize Unlimited -Properties Identity, PrimarySmtpAddress, ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward, LegacyExchangeDN | Select-Object Identity, PrimarySmtpAddress, ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward, LegacyExchangeDN
 
 		Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
 			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
@@ -119,28 +132,24 @@ Function Get-MailboxForwarding {
 		}
 	}
 	else {
+		<#
 		Get-Mailbox -ResultSize Unlimited | ForEach-Object {
 			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
 		}
+		#>
 
+		$mbxs = Get-Mailbox -ResultSize Unlimited
 		Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
 			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
 		}
 	}
 
-	Write-Verbose 'Get all mailboxes'
 	# if mailboxes is specified, get only these mailboxes
 	if ($null -ne $Mailboxes -and $Mailboxes.Count -gt 0) {
 		foreach ($mbx in $Mailboxes) {
 			try {
-				if (-not $ExchangeOnPremise) {
-					$mailbox = Get-EXOMailbox -Identity $mbx -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop
-					$mailboxesList.Add($mailbox)
-				}
-				else {
-					$mailbox = Get-Mailbox -Identity $mbx -ErrorAction Stop
-					$mailboxesList.Add($mailbox)
-				}
+				$mailbox = $mbxs | Where-Object { $_.PrimarySMTPAddress -eq $mbx }
+				$mailboxesList.Add($mailbox)
 			}
 			catch {
 				Write-Warning "$mbx mailbox not found. $($_.Exception.Message)"
