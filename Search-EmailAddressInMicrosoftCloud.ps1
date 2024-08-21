@@ -1,10 +1,10 @@
 ﻿# https://github.com/itpro-tips/Microsoft365-Toolbox
-# itpro-tips.com/itpro-tips/Microsoft365-Toolbox
+
 function Search-EmailAddressInMicrosoftCloud {
     [CmdletBinding()]
     Param(
         [string[]]$SearchEmails,
-		[string[]]$SearchByDomain
+        [string[]]$SearchByDomain
     )
 
     function AddtoHashTable {
@@ -21,11 +21,11 @@ function Search-EmailAddressInMicrosoftCloud {
                 $emailaddress = $emailaddress -replace 'sip:', ''
                 $emailaddress = $emailaddress -replace 'spo:', ''
 
-				if($SearchByDomain) {
-					if($emailaddress -notlike "*$SearchByDomain") {
-						continue
-					}
-				}
+                if ($SearchByDomain) {
+                    if ($emailaddress -notlike "*$SearchByDomain") {
+                        continue
+                    }
+                }
 				
                 if (-not($allO365EmailAddressesHashTable.ContainsKey($emailaddress))) {
                     $allO365EmailAddressesHashTable.add($emailaddress, ($emailaddress + '|' + $user.objectID + '|' + $user.DisplayName + '|' + $user.RecipientTypeDetails))

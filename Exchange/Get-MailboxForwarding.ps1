@@ -78,7 +78,7 @@ function Get-MailboxForwarding {
 				$color = 'Gray'
 			}
 
-			Write-Host "$prefix`OutboundSpamPolicy '$($outboundSpamPolicy.Name)' (Enabled:$($outboundSpamPolicy.Enabled)) AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor $color
+			Write-Host "$prefix`OutboundSpamPolicy '$($outboundSpamPolicy.Name)' - AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor $color
 		
 			$autoForwardMode = $outboundSpamPolicy.AutoForwardingMode
 		
@@ -110,18 +110,19 @@ function Get-MailboxForwarding {
 	$recipients | ForEach-Object {
 		$hashRecipients.Add($_.Name, $_.PrimarySmtpAddress)
 	}
-	#>
+
+	$properties = @('Identity', 'Name', 'DistinguishedName', 'PrimarySmtpAddress', 'ForwardingAddress', 'ForwardingSmtpAddress', 'DeliverToMailboxAndForward', 'LegacyExchangeDN', 'UserPrincipalName')
+
 
 	# Get-LegacyExchangeDN, needed for inbox rules. We can also use name or ID but legacyExchangeDN is more reliable
 	# Get-EXORecipient does not contain LegacyExchangeDN property so we need to get it from Get-EXOMailbox / Get-DistributionGroup and Get-UnifiedGroup
 	if (-not $ExchangeOnPremise) {
-		<#
-		Get-ExoMailbox -ResultSize Unlimited -Properties LegacyExchangeDN | ForEach-Object {
+
+		# Get-EOMailbox doesn't contain all the properties we need by default, so we need to specify them
+		Get-EXOMailbox -ResultSize Unlimited -Properties $properties | Select-Object $properties | ForEach-Object {
+			$mailboxesList.Add($_)
 			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
 		}
-		#>
-
-		$mbxs = Get-EXOMailbox -ResultSize Unlimited -Properties Identity, PrimarySmtpAddress, ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward, LegacyExchangeDN | Select-Object Identity, PrimarySmtpAddress, ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward, LegacyExchangeDN
 
 		Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
 			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
@@ -138,7 +139,11 @@ function Get-MailboxForwarding {
 		}
 		#>
 
-		$mbxs = Get-Mailbox -ResultSize Unlimited
+		Get-Mailbox -ResultSize Unlimited | Select-Object $properties | ForEach-Object {
+			$mailboxesList.Add($_)
+			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
+		}
+		
 		Get-DistributionGroup -ResultSize Unlimited | ForEach-Object {
 			$hashRecipients.Add($_.LegacyExchangeDN, $_.PrimarySmtpAddress)
 		}
@@ -146,32 +151,23 @@ function Get-MailboxForwarding {
 
 	# if mailboxes is specified, get only these mailboxes
 	if ($null -ne $Mailboxes -and $Mailboxes.Count -gt 0) {
+		[System.Collections.Generic.List[Object]]$tempMailboxesList = @()
 		foreach ($mbx in $Mailboxes) {
 			try {
-				$mailbox = $mbxs | Where-Object { $_.PrimarySMTPAddress -eq $mbx }
-				$mailboxesList.Add($mailbox)
+				$mailbox = $mailboxesList | Where-Object { $_.PrimarySMTPAddress -eq $mbx }
+				$tempMailboxesList.Add($mailbox)
 			}
 			catch {
 				Write-Warning "$mbx mailbox not found. $($_.Exception.Message)"
 			}
 		}
+
+		$mailboxesList = $tempMailboxesList
 	}
 	# else get all mailboxes
 	else {
-		try {
-			if (-not $ExchangeOnPremise) {
-				# Get-EXOMailbox contains only a subset of properties by default. We need to add properties needed.
-				# Note: we can use -PropertySets Delivery
-				$mailboxesList = Get-EXOMailbox -ResultSize Unlimited -Properties ForwardingAddress, ForwardingSmtpAddress, DeliverToMailboxAndForward -ErrorAction Stop | Sort-Object Name
-			}
-			else {
-				$mailboxesList = Get-Mailbox -ResultSize Unlimited -ErrorAction Stop | Sort-Object Name
-			}
-		}
-		catch {
-			Write-Warning "Mailboxes not found. $($_.Exception.Message)"
-			return
-		}
+		# all mailboxes are in $mailboxesList
+		# nothing to do here
 	}
 	
 	# To prevent, block via rule and via OWA policy
