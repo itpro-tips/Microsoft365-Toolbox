@@ -52,6 +52,8 @@ function Get-MailboxForwarding {
 
 	[System.Collections.Generic.List[PSObject]]$mailboxesList = @()
 	[System.Collections.Generic.List[PSObject]]$forwardList = @()
+	# inboxForwardList is use to contains the mailbox with inbox rules with forward. We need to use it as temporary storage to check if the mailbox has already a forward set by forwardingAddress or forwardingSMTPAddress
+	[System.Collections.Generic.List[PSObject]]$inboxForwardList = @()
 
 	Write-Host -ForegroundColor cyan 'Get Accepted Domain in Exchange Online to identify internal/external forward'
 	$internalDomains = (Get-AcceptedDomain).DomainName
@@ -111,7 +113,7 @@ function Get-MailboxForwarding {
 		$hashRecipients.Add($_.Name, $_.PrimarySmtpAddress)
 	}
 
-	$properties = @('Identity', 'Name', 'DistinguishedName', 'PrimarySmtpAddress', 'ForwardingAddress', 'ForwardingSmtpAddress', 'DeliverToMailboxAndForward', 'LegacyExchangeDN', 'UserPrincipalName')
+	$properties = @('Identity', 'Name', 'DistinguishedName', 'PrimarySmtpAddress', 'ForwardingAddress', 'ForwardingSmtpAddress', 'DeliverToMailboxAndForward', 'LegacyExchangeDN', 'UserPrincipalName', 'DisplayName')
 
 
 	# Get-LegacyExchangeDN, needed for inbox rules. We can also use name or ID but legacyExchangeDN is more reliable
@@ -269,6 +271,8 @@ function Get-MailboxForwarding {
 			if ($null -ne $forwardingSMTPAddress) {
 				Write-Host -ForegroundColor yellow "$($mailbox.Name) - $($mailbox.PrimarySMTPAddress) - 1 forwardingSMTPAddress parameter found"
  
+				# we need to check if the forwardList.PrimarySMTPAddress already contains 
+				#if ($forwardList.PrimarySMTPAddress -contains $mailbox.PrimarySmtpAddress) {
 				if ($forwardList.PrimarySMTPAddress -contains $mailbox.PrimarySmtpAddress) {
 					$precedence = 'ForwardingAddress is already set for this mailbox. ForwardingAddress has a higher priority than the ForwardingSMTPAddress. This ForwardingSMTPAddress is ignored'
 				}
@@ -376,7 +380,7 @@ function Get-MailboxForwarding {
 						Precedence                             = $precedence
 						ForwardingAddress                      = '-'
 						ForwardingSMTPAddress                  = '-'
-						ForwardingWorks                        = 'Not evaluated yet(check precedence and InboxRuleEnabled and forward address)'
+						ForwardingWorks                        = 'Not evaluated yet (check precedence and InboxRuleEnabled and forward address)'
 						DeliverToMailboxAndForward             = '-'
 						InboxRulePriority                      = $inboxForwardRule.Priority
 						InboxRuleEnabled                       = $inboxForwardRule.Enabled
@@ -389,7 +393,8 @@ function Get-MailboxForwarding {
 					}
 			
 					#Add object to an array
-					$forwardList.Add($object)
+					# $forwardList.Add($object)
+					$inboxForwardList.Add($object)
 				}
 			
 				foreach ($forwardAsAttachmentTo in $inboxForwardRule.ForwardAsAttachmentTo) {
@@ -414,7 +419,7 @@ function Get-MailboxForwarding {
 						Precedence                             = $precedence
 						ForwardingAddress                      = '-'
 						ForwardingSMTPAddress                  = '-'
-						ForwardingWorks                        = 'Not evaluated yet(check precedence and InboxRuleEnabled and forward address)'
+						ForwardingWorks                        = 'Not evaluated yet (check precedence and InboxRuleEnabled and forward address)'
 						DeliverToMailboxAndForward             = '-'
 						InboxRulePriority                      = $inboxForwardRule.Priority
 						InboxRuleEnabled                       = $inboxForwardRule.Enabled
@@ -427,7 +432,8 @@ function Get-MailboxForwarding {
 					}
 			
 					#Add object to an array
-					$forwardList.Add($object)
+					#$forwardList.Add($object)
+					$inboxForwardList.Add($object)
 				}
 			
 				foreach ($redirectTo in $inboxForwardRule.RedirectTo) {
@@ -453,7 +459,7 @@ function Get-MailboxForwarding {
 						Precedence                             = $precedence
 						ForwardingAddress                      = '-'
 						ForwardingSMTPAddress                  = '-'
-						ForwardingWorks                        = 'Not evaluated(check precedence and InboxRuleEnabled and forward address)'
+						ForwardingWorks                        = 'Not evaluated yet (check precedence and InboxRuleEnabled and forward address)'
 						DeliverToMailboxAndForward             = '-'
 						InboxRulePriority                      = $inboxForwardRule.Priority
 						InboxRuleEnabled                       = $inboxForwardRule.Enabled
@@ -466,7 +472,8 @@ function Get-MailboxForwarding {
 					}
 						
 					#Add object to an array
-					$forwardList.Add($object)
+					#$forwardList.Add($object)
+					$inboxForwardList.Add($object)
 				}
 
 				foreach ($sendTextMessageNotificationTo in $inboxForwardRule.SendTextMessageNotificationTo) {
@@ -500,10 +507,15 @@ function Get-MailboxForwarding {
 					}
 									
 					#Add object to an array
-					$forwardList.Add($object)
+					#$forwardList.Add($object)
+					$inboxForwardList.Add($object)
 				}						
 			}
 		}
+	}
+
+	$inboxForwardList | ForEach-Object {
+		$forwardList.Add($_)
 	}
 
 	Write-Host -ForegroundColor cyan "$($forwardList.count) forward(s) found"
