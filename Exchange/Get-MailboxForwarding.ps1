@@ -65,8 +65,9 @@ function Get-MailboxForwarding {
 	}
 
 	if (-not $ExchangeOnPremise) {
-		$outboundSpamPolicies = Get-HostedOutboundSpamFilterPolicy
+		$outboundSpamPolicies = [array](Get-HostedOutboundSpamFilterPolicy)
 
+		Write-Host -ForegroundColor Cyan "You have $($outboundSpamPolicies.Count) OutboundSpamPolicies":
 		foreach ($outboundSpamPolicy in $outboundSpamPolicies) {
 		
 			$state = (Get-HostedOutboundSpamFilterRule | Where-Object { $_.HostedOutboundSpamFilterPolicy -eq $outboundSpamPolicy.Name }).State
@@ -80,7 +81,7 @@ function Get-MailboxForwarding {
 				$color = 'Gray'
 			}
 
-			Write-Host "$prefix`OutboundSpamPolicy '$($outboundSpamPolicy.Name)' - AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor $color
+			Write-Host "- $prefix`OutboundSpamPolicy '$($outboundSpamPolicy.Name)' - AutoForwardingMode: $($outboundSpamPolicy.AutoForwardingMode)" -ForegroundColor $color
 		
 			$autoForwardMode = $outboundSpamPolicy.AutoForwardingMode
 		
@@ -114,7 +115,6 @@ function Get-MailboxForwarding {
 	}
 
 	$properties = @('Identity', 'Name', 'DistinguishedName', 'PrimarySmtpAddress', 'ForwardingAddress', 'ForwardingSmtpAddress', 'DeliverToMailboxAndForward', 'LegacyExchangeDN', 'UserPrincipalName', 'DisplayName')
-
 
 	# Get-LegacyExchangeDN, needed for inbox rules. We can also use name or ID but legacyExchangeDN is more reliable
 	# Get-EXORecipient does not contain LegacyExchangeDN property so we need to get it from Get-EXOMailbox / Get-DistributionGroup and Get-UnifiedGroup

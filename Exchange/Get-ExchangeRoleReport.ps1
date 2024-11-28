@@ -22,6 +22,7 @@ Written by Bastien Perez (ITPro-Tips.com)
 
 Version history:
 V1.0, 14 april 2022 - Initial version
+v2.0 22 november 2024 - Add option to see permission graph - not work by now
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
@@ -35,6 +36,7 @@ DEALINGS IN THE SOFTWARE.
 function Get-ExchangeRoleReport {
     [CmdletBinding()]
     param (
+        [switch]$ShowGraph
     )
 
     try {
@@ -71,16 +73,24 @@ function Get-ExchangeRoleReport {
                 Write-Host -ForegroundColor Cyan "Role $($exchangeRole.Name) - Member found: $($roleMembers.count)"
             }
 
+            if ($exchangeRole.Description -eq '' -and $exchangeRole.Name -like 'ISVMailboxUsers_*') {
+                $roleDescription = 'Third-party application developer mailbox role'
+            }
+            else {
+                $roleDescription = $exchangeRole.Description
+            }
+
             if ($roleMembers.count -eq 0) {
-                $object = [PSCustomObject] [ordered]@{
-                    'Role'                    = $exchangeRole.Name
-                    'RoleDescription'         = $exchangeRole.Description
-                    'MemberName'       = '-'
-                    'MemberDisplayName'       = '-'
-                    'MemberPrimarySMTPAddres' = '-'
-                    'MemberIsDirSynced'       = '-'
-                    'MemberObjectID'          = '-'
+                $object = [PSCustomObject][ordered]@{
+                    'Role'                       = $exchangeRole.Name
+                    'MemberName'                 = '-'
+                    'MemberDisplayName'          = '-'
+                    'MemberPrimarySMTPAddres'    = '-'
+                    'MemberIsDirSynced'          = '-'
+                    'MemberObjectID'             = '-'
                     'MemberRecipientTypeDetails' = '-'
+                    # si descriptin vide et si nom like ISVMailboxUsers_* on donne une description 'Third-party application developer mailbox role'
+                    'RoleDescription'            = $roleDescription
                 }
                 
                 $exchangeRolesMembership.Add($object)
@@ -91,17 +101,18 @@ function Get-ExchangeRoleReport {
                 foreach ($roleMember in $roleMembers) {                
                     # if user already exist in the arraylist, we look for to prevent a new Get-MsolUser (time consuming)
                     # Select only the first if user already exists in multiple roles
-
+                   
                     $object = [PSCustomObject][ordered]@{
-                        'Role'                      = $exchangeRole.Name
-                        'RoleDescription'           = $exchangeRole.Description
-                        'MemberName'                = $roleMember.Name
-                        'MemberDisplayName'         = $roleMember.DisplayName
-                        'MemberPrimarySMTPAddres'   = $roleMember.PrimarySmtpAddress
-                        'MemberIsDirSynced'         = $roleMember.IsDirSynced
-                        'MemberObjectID'            = $roleMember.ExternalDirectoryObjectId
-                        'MemberRecipientTypeDetails'= $roleMember.RecipientTypeDetails
+                        'Role'                       = $exchangeRole.Name
+                        'MemberName'                 = $roleMember.Name
+                        'MemberDisplayName'          = $roleMember.DisplayName
+                        'MemberPrimarySMTPAddres'    = $roleMember.PrimarySmtpAddress
+                        'MemberIsDirSynced'          = $roleMember.IsDirSynced
+                        'MemberObjectID'             = $roleMember.ExternalDirectoryObjectId
+                        'MemberRecipientTypeDetails' = $roleMember.RecipientTypeDetails
+                        'RoleDescription'            = $roleDescription
                     }
+
                     $exchangeRolesMembership.Add($object)
                 }
 
@@ -111,6 +122,8 @@ function Get-ExchangeRoleReport {
             Write-Warning $_.Exception.Message
         }
     }
-    
+
+    # il faut ajouter Get-ManagementRoleAssignment pour avoir les permissions car parfois cela n'est pas fait via un groupe
+    #Get-ManagementRoleAssignment -RoleAssigneeType User
     return $exchangeRolesMembership
 }
