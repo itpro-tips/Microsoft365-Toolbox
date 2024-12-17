@@ -28,10 +28,6 @@ function New-MessageCenterReadAppRegistration {
     $tenantDetail = Get-MgOrganization
     $tenantID = $tenantDetail.Id
 
-    # source https://www.powershellgallery.com/packages/JyskIT.Automation/1.0.5/Content/Public%5CTenantConfiguration%5CNew-BitTitanAppRegistration.ps1
-    # exoResource is specific to the resource (API) that you want to access. In our case Office 365 Exchange Online is the resource (00000002-0000-0ff1-ce00-000000000000)
-    # source Graph X-Ray and https://github.com/dmb2168/o365-appids/blob/master/ids.md
-
     $appRegistrationParams = @{
         displayName            = $ApplicationName
         description            = "App registration for $ApplicationName"
