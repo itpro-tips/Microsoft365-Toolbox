@@ -1,1 +1,0 @@
-CMtrace tool extracted from https://www.microsoft.com/en-us/evalcenter/download-microsoft-endpoint-configuration-manager > `SMSSETUP\TOOLS` folder
