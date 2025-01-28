@@ -1,13 +1,15 @@
 $oneDriveRoot = $env:OneDriveCommercial
 $userProfile = $env:USERPROFILE
 
-$oneDriveDesktop = [environment]::getfolderpath("Desktop")
-$oneDriveMyDocuments = [environment]::getfolderpath("MyDocuments")
-$oneDriveMyPictures = [environment]::getfolderpath("MyPictures")
+$oneDriveDesktop = [Environment]::GetFolderPath('Desktop')
+$oneDriveMyDocuments = [Environment]::GetFolderPath('MyDocuments')
+$oneDriveMyPictures = [Environment]::GetFolderPath('MyPictures')
 
-function Fix-OneDriveKnownFolderLinks {
+function Invoke-OneDriveKnownFoldersLinksFix {
 	Param(
+		[Parameter(Mandatory = $true)]
 		[string]$Folder,
+		[Parameter(Mandatory = $true)]
 		[string]$OneDriveFolder
 	)
 		
@@ -46,6 +48,6 @@ function Fix-OneDriveKnownFolderLinks {
 	}
 }
 
-Fix-OneDriveKnownFolderLinks -Folder Desktop -OneDriveFolder $oneDriveDesktop
-Fix-OneDriveKnownFolderLinks -Folder Images -OneDriveFolder $oneDriveMyPictures
-Fix-OneDriveKnownFolderLinks -Folder Documents -OneDriveFolder $oneDriveMyDocuments
+Invoke-OneDriveKnownFoldersLinksFix -Folder Desktop -OneDriveFolder $oneDriveDesktop
+Invoke-OneDriveKnownFoldersLinksFix -Folder Images -OneDriveFolder $oneDriveMyPictures
+Invoke-OneDriveKnownFoldersLinksFix -Folder Documents -OneDriveFolder $oneDriveMyDocuments
