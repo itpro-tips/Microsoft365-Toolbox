@@ -32,9 +32,21 @@ function Get-LapsEntraIDPassword {
     $headers.Add('client-request-id', $correlationID)
 
     #Initation the request to Microsoft Graph for the LAPS password
-    $response = Invoke-MgGraphRequest -Method GET -Uri $URI -Headers $headers -OutputType Json
+    try {
+        $response = Invoke-MgGraphRequest -Method GET -Uri $URI -Headers $headers -OutputType Json
+    }
+    catch {
+        Write-Warning "Device ID: $DeviceId $($_.Exception.Message -replace "`n", ' ' -replace "`r", ' ')"
+        $object = [PSCustomObject][ordered]@{
+            DeviceName             = '$null'
+            DeviceId               = $deviceID
+            PasswordExpirationTime = $null
+        }
 
-    if([string]::IsNullOrWhitespace($response)) {
+        return $object
+    }
+
+    if ([string]::IsNullOrWhitespace($response)) {
         $object = [PSCustomObject][ordered]@{
             DeviceName             = '$null'
             DeviceId               = $deviceID
