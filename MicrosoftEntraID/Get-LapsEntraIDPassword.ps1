@@ -34,6 +34,16 @@ function Get-LapsEntraIDPassword {
     #Initation the request to Microsoft Graph for the LAPS password
     $response = Invoke-MgGraphRequest -Method GET -Uri $URI -Headers $headers -OutputType Json
 
+    if([string]::IsNullOrWhitespace($response)) {
+        $object = [PSCustomObject][ordered]@{
+            DeviceName             = '$null'
+            DeviceId               = $deviceID
+            PasswordExpirationTime = $null
+        }
+
+        return $object
+    }
+
     # Build custom PS output object
     $resultsJson = ConvertFrom-Json $response
     
@@ -98,5 +108,4 @@ function Get-LapsEntraIDPassword {
 
         $object
     }
-
 }
