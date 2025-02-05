@@ -1,5 +1,41 @@
+<#.SYNOPSIS
+Retrieves the LAPS password for a Microsoft Entra ID device.
+
+.DESCRIPTION
+Gets the Windows Local Administrator Password Solution (LAPS) password for a specified device in Microsoft Entra ID (formerly Azure AD).
+
+.PARAMETER DeviceID
+The Microsoft Entra ID (Azure AD) Device ID for which you want to retrieve the LAPS password. This is the unique identifier assigned to the device in Microsoft Entra ID.
+
+.EXAMPLE
+PS> Get-LapsEntraIDPassword -DeviceID "12345678-1234-1234-1234-123456789012"
+Retrieves the LAPS password for the specified device ID.
+
+.EXAMPLE
+PS> Get-LapsEntraIDPassword -DeviceID "12345678-1234-1234-1234-123456789012" -IncludePasswords
+Retrieves the LAPS password for the specified device ID, including the password itself as a secure string.
+
+.EXAMPLE
+PS> Get-LapsEntraIDPassword -DeviceID "12345678-1234-1234-1234-123456789012" -IncludePasswords -AsPlainText
+Retrieves the LAPS password for the specified device ID, including the password itself, and displays the password in plain text.
+
+.EXAMPLE
+PS> Get-LapsEntraIDPassword -DeviceID "12345678-1234-1234-1234-123456789012" -IncludePasswords -IncludeHistory
+Retrieves the LAPS password for the specified device ID, including the password itself, and includes the password history.
+
+.EXAMPLE
+PS> Get-LapsEntraIDPassword -DeviceID "12345678-1234-1234-1234-123456789012" -IncludePasswords -IncludeHistory -AsPlainText
+Retrieves the LAPS password for the specified device ID, including the password itself, includes the password history, and displays the password in plain text.
+
+.NOTES
+Requires appropriate permissions in Microsoft Entra ID to read LAPS passwords.
+This cmdlet is part of the Microsoft365-Toolbox module.
+
+#>
+
 function Get-LapsEntraIDPassword {
     param(
+        [Parameter(Mandatory = $true, HelpMessage = 'The Microsoft Entra ID (Azure AD) Device ID for which you want to retrieve the LAPS password.')]
         [string]$DeviceID,
         [switch]$IncludePasswords,
         [switch]$AsPlainText,
