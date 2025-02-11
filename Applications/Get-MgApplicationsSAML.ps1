@@ -3,7 +3,6 @@
 try {
     # At the date of writing (december 2023), PreferredTokenSigningKeyEndDateTime parameter is only on Beta profile
     Import-Module 'Microsoft.Graph.Beta.Applications' -ErrorAction Stop -ErrorVariable mgGraphAppsMissing
-    Import-Module 'Microsoft.Graph.Beta.Identity.SignIns' -ErrorAction Stop -ErrorVariable mgGraphIdentitySignInsMissing
 }
 catch {
     if ($mgGraphAppsMissing) {

@@ -1,6 +1,6 @@
 try {
+    # for Get-MgApplication/Get-MgApplicationOwner
     Import-Module 'Microsoft.Graph.Applications' -ErrorAction Stop -ErrorVariable mgGraphAppsMissing
-    Import-Module 'Microsoft.Graph.Identity.SignIns' -ErrorAction Stop -ErrorVariable mgGraphIdentitySignInsMissing
 }
 catch {
     if ($mgGraphAppsMissing) {
