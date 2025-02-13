@@ -241,11 +241,11 @@ function Get-MgRoleReport {
                 # add the user to the cache to avoid multiple requests for this user
                 $usersCacheArray.Add($mgUser)
             }
-
-            $member | Add-Member -MemberType NoteProperty -Name 'LastSignInDateTime' -Value $lastSignInDateTime
-            $member | Add-Member -MemberType NoteProperty -Name 'AccountEnabled' -Value $accountEnabled
-            $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
         }
+
+        $member | Add-Member -MemberType NoteProperty -Name 'LastSignInDateTime' -Value $lastSignInDateTime
+        $member | Add-Member -MemberType NoteProperty -Name 'AccountEnabled' -Value $accountEnabled
+        $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
     }
 
     return $rolesMembers
