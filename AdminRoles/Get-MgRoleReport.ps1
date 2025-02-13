@@ -178,7 +178,5 @@ function Get-MgRoleReport {
         }
     }
 
-    
-
     return $rolesMembers
 }
