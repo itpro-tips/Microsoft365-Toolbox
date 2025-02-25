@@ -27,9 +27,18 @@ Written by Bastien Perez (Clidsys.com - ITPro-Tips.com)
 For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 
 Version History:
-#[1.4] - 2025-02-13
+## [1.5] - 2025-02-25
+### Changed
+- Always return `true` or `false` for `onPremisesSyncEnabled` properties
+- Fix issues with `usersCacheArray` that was not working
+- Sign-in activity tracking for service principals
+
+### Plannned for next release
+- Switch to `Invoke-MgGraphRequest` instead of `Get-Mg*` cmdlets
+
+## [1.4] - 2025-02-13
 ### Added
-- Sign-in activity tracking.
+- Sign-in activity tracking for users
 - Account enabled status.
 - On-premises sync enabled status.
 - Remove old parameters
@@ -72,6 +81,7 @@ function Get-MgRoleReport {
         'Microsoft.Graph.Identity.Governance'
         'Microsoft.Graph.Users'
         'Microsoft.Graph.Groups'
+        'Microsoft.Graph.Beta.Reports'
     )
     
     foreach ($module in $modules) {
@@ -84,32 +94,53 @@ function Get-MgRoleReport {
         }
     }
 
+    $isConnected = $false
+
+    $isConnected = $null -ne (Get-MgContext -ErrorAction SilentlyContinue)
+    
     if ($ForceNewToken.IsPresent) {
         $null = Disconnect-MgGraph -ErrorAction SilentlyContinue
     }
+    
+    $scopes = (Get-MgContext).Scopes
 
-    Write-Host -ForegroundColor Cyan 'Connecting to Microsoft Graph. Scopes: Directory.Read.All'
-    $null = Connect-MgGraph -Scopes 'Directory.Read.All' -NoWelcome
+    $permissionMissing = 'Directory.Read.All' -notin $scopes
+
+    if ($permissionMissing) {
+        Write-Verbose 'You need to have the Directory.Read.All permission in the current token, disconnect to force getting a new token with the right permissions'
+    }
+
+    if (-not $isConnected) {
+        Write-Verbose 'Connecting to Microsoft Graph. Scopes: Directory.Read.All'
+        $null = Connect-MgGraph -Scopes 'Directory.Read.All' -NoWelcome
+    }
 
     try {
         #$mgRoles = Get-MgRoleManagementDirectoryRoleDefinition -ErrorAction Stop
         
         $mgRoles = Get-MgRoleManagementDirectoryRoleAssignment -All -ExpandProperty Principal
+        #$mgRoles = (Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments' -OutputType PSObject).Value
+
+
         # The maximum property is 1 so we need to do a second request to get the role definition
         $mgRolesDefinition = Get-MgRoleManagementDirectoryRoleAssignment -All -ExpandProperty roleDefinition
+        #$mgRolesDefinition = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments?`$expand=roleDefinition" -OutputType PSObject).Value
     }
     catch {
         Write-Warning $($_.Exception.Message)   
     }   
     
     foreach ($mgRole in $mgRoles) {
+        # Add the role definition to the object
         Add-Member -InputObject $mgRole -MemberType NoteProperty -Name RoleDefinitionExtended -Value ($mgRolesDefinition | Where-Object { $_.id -eq $mgRole.id }).roleDefinition 
-    } # Add the role definition to the object
+        #Add-Member -InputObject $mgRole -MemberType NoteProperty -Name RoleDefinitionExtended -Value ($mgRolesDefinition | Where-Object { $_.id -eq $mgRole.id }).roleDefinition.description 
+    } 
 
     if ($IncludePIMEligibleAssignments) {
         Write-Verbose 'Collecting PIM eligible role assignments...'
         try {
             $mgRoles += (Get-MgRoleManagementDirectoryRoleEligibilitySchedule -All -ExpandProperty * -ErrorAction Stop | Select-Object id, principalId, directoryScopeId, roleDefinitionId, status, principal, @{Name = 'RoleDefinitionExtended'; Expression = { $_.roleDefinition } })
+            #$mgRoles += (Invoke-MgGraphRequest -Method GET -Uri 'https://graph.microsoft.com/v1.0/roleManagement/directory/roleEligibilitySchedule' -OutputType PSObject).Value
         }
         catch {
             Write-Warning "Unable to get PIM eligible role assignments: $($_.Exception.Message)"
@@ -143,8 +174,10 @@ function Get-MgRoleReport {
 
         if ($object.PrincipalType -eq 'group') {
             $group = Get-MgGroup -GroupId $object.Principal
+            #$group = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups/$($object.Principal)" -OutputType PSObject)
 
             $groupMembers = Get-MgGroupMember -GroupId $group.Id -Property displayName, userPrincipalName
+            #$groupMembers = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups/$($group.Id)/members" -OutputType PSObject).Value
 
             foreach ($member in $groupMembers) {
                 $typeMapping = @{
@@ -212,6 +245,7 @@ function Get-MgRoleReport {
     }
 
     [System.Collections.Generic.List[Object]]$usersCacheArray = @()
+    [System.Collections.Generic.List[Object]]$spCacheArray = @()
 
     foreach ($member in $rolesMembers) {
 
@@ -233,13 +267,29 @@ function Get-MgRoleReport {
                 # Therefore, we must provide the account's object identifier for the command to function correctly.
                 # To overcome this issue, we use the -Filter parameter to search for the user by their UserPrincipalName.
                 $mgUser = Get-MgUser -Filter "UserPrincipalName eq '$($member.Principal)'" -Property UserPrincipalName, AccountEnabled, SignInActivity, onPremisesSyncEnabled | Select-Object UserPrincipalName, AccountEnabled, @{Name = 'LastSignInDateTime'; Expression = { $_.SignInActivity.LastSignInDateTime } }, onPremisesSyncEnabled
-                
+                #$mgUser = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users?$filter=userPrincipalName eq '$($member.Principal)'" -OutputType PSObject).Value
+
                 $accountEnabled = $mgUser.AccountEnabled
                 $lastSignInDateTime = $mgUser.LastSignInDateTime
-                $onPremisesSyncEnabled = $mgUser.onPremisesSyncEnabled
+                $onPremisesSyncEnabled = [bool]($mgUser.onPremisesSyncEnabled -eq $true)
 
                 # add the user to the cache to avoid multiple requests for this user
-                $usersCacheArray.Add($mgUser)
+                $usersCacheArray.Add($member)
+            }
+        }
+        elseif ($member.PrincipalType -eq 'servicePrincipal') {
+            if ($spCacheArray.AppId -Contains $member.Principal) {
+                $accountEnabled = ($spCacheArray | Where-Object { $_.AppId -eq $member.Principal }).AccountEnabled
+                $lastSignInDateTime = ($spCacheArray | Where-Object { $_.AppId -eq $member.Principal }).LastSignInDateTime
+                $onPremisesSyncEnabled = ($spCacheArray | Where-Object { $_.AppId -eq $member.Principal }).onPremisesSyncEnabled
+            }
+            else {
+                $accountEnabled = 'Not applicable'
+                $lastSignInDateTime = (Get-MgBetaReportServicePrincipalSignInActivity -Filter "appId eq '$($member.Principal)'").LastSignInActivity.LastSignInDateTime
+                $onPremisesSyncEnabled = $false
+
+                # add the service principal to the cache to avoid multiple requests for this service principal
+                $spCacheArray.Add($member)
             }
         }
 
