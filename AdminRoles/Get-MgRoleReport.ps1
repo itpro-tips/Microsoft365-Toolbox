@@ -29,6 +29,7 @@ For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 Version History:
 ## [1.6] - 2025-02-26
 ### Changed
+- Add `permissionsNeeded` variable
 - Add `onpremisesSyncEnabled` property for groups
 - Add all type objects in the cache array
 - Add `LastNonInteractiveSignInDateTime` property for users
@@ -48,6 +49,7 @@ Version History:
 - Account enabled status.
 - On-premises sync enabled status.
 - Remove old parameters
+- Test if already connected to Microsoft Graph and with the right permissions
 
 ## [1.3] - 2024-05-15
 ### Changed
@@ -115,15 +117,16 @@ function Get-MgRoleReport {
     
     $scopes = (Get-MgContext).Scopes
 
-    $permissionMissing = 'Directory.Read.All' -notin $scopes
+    $permissionsNeeded = 'Directory.Read.All'
+    $permissionMissing = $permissionsNeeded -notin $scopes
 
     if ($permissionMissing) {
-        Write-Verbose 'You need to have the Directory.Read.All permission in the current token, disconnect to force getting a new token with the right permissions'
+        Write-Verbose "You need to have the $permissionsNeeded permission in the current token, disconnect to force getting a new token with the right permissions"
     }
 
     if (-not $isConnected) {
-        Write-Verbose 'Connecting to Microsoft Graph. Scopes: Directory.Read.All'
-        $null = Connect-MgGraph -Scopes 'Directory.Read.All' -NoWelcome
+        Write-Verbose "Connecting to Microsoft Graph. Scopes: $permissionsNeeded"
+        $null = Connect-MgGraph -Scopes $permissionsNeeded -NoWelcome
     }
 
     try {
