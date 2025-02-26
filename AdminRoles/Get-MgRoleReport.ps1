@@ -27,14 +27,20 @@ Written by Bastien Perez (Clidsys.com - ITPro-Tips.com)
 For more Office 365/Microsoft 365 tips and news, check out ITPro-Tips.com.
 
 Version History:
+## [1.6] - 2025-02-26
+### Changed
+- Add `onpremisesSyncEnabled` property for groups
+- Add all type objects in the cache array
+- Add `LastNonInteractiveSignInDateTime` property for users
+
 ## [1.5] - 2025-02-25
 ### Changed
 - Always return `true` or `false` for `onPremisesSyncEnabled` properties
-- Fix issues with `usersCacheArray` that was not working
+- Fix issues with `objectsCacheArray` that was not working
 - Sign-in activity tracking for service principals
 
 ### Plannned for next release
-- Switch to `Invoke-MgGraphRequest` instead of `Get-Mg*` cmdlets
+- Switch to `Invoke-MgGraphRequest` instead of `Get-Mg*` CMDlets
 
 ## [1.4] - 2025-02-13
 ### Added
@@ -73,7 +79,10 @@ function Get-MgRoleReport {
         [Parameter(Mandatory = $false)]
         [boolean]$IncludePIMEligibleAssignments = $true,
         [Parameter(Mandatory = $false)]
-        [switch]$ForceNewToken
+        [switch]$ForceNewToken,
+        # using with the Maester framework
+        [Parameter(Mandatory = $false)]
+        [switch]$MaesterMode        
     )
 
     $modules = @(
@@ -99,7 +108,9 @@ function Get-MgRoleReport {
     $isConnected = $null -ne (Get-MgContext -ErrorAction SilentlyContinue)
     
     if ($ForceNewToken.IsPresent) {
+        Write-Verbose 'Disconnecting from Microsoft Graph'
         $null = Disconnect-MgGraph -ErrorAction SilentlyContinue
+        $isConnected = $false
     }
     
     $scopes = (Get-MgContext).Scopes
@@ -158,22 +169,25 @@ function Get-MgRoleReport {
         }
 
         $object = [PSCustomObject][ordered]@{    
-            Principal              = $principal   
-            'PrincipalDisplayName' = $mgRole.principal.AdditionalProperties.displayName
-            'PrincipalType'        = $mgRole.principal.AdditionalProperties.'@odata.type'.Split('.')[-1]
-            'AssignedRole'         = $mgRole.RoleDefinitionExtended.displayName
-            'AssignedRoleScope'    = $mgRole.directoryScopeId
-            'AssignmentType'       = if ($mgRole.status -eq 'Provisioned') { 'Eligible' } else { 'Permanent' }
-            'IsBuiltIn'            = $mgRole.RoleDefinitionExtended.isBuiltIn
-            'RoleTemplate'         = $mgRole.RoleDefinitionExtended.templateId
-            DirectMember           = $true
-            Recommendations        = 'Check if the user has alternate email or alternate phone number on Microsoft Entra ID'
+            Principal            = $principal   
+            PrincipalDisplayName = $mgRole.principal.AdditionalProperties.displayName
+            PrincipalType        = $mgRole.principal.AdditionalProperties.'@odata.type'.Split('.')[-1]
+            AssignedRole         = $mgRole.RoleDefinitionExtended.displayName
+            AssignedRoleScope    = $mgRole.directoryScopeId
+            AssignmentType       = if ($mgRole.status -eq 'Provisioned') { 'Eligible' } else { 'Permanent' }
+            RoleIsBuiltIn        = $mgRole.RoleDefinitionExtended.isBuiltIn
+            RoleTemplate         = $mgRole.RoleDefinitionExtended.templateId
+            DirectMember         = $true
+            Recommendations      = 'Check if the user has alternate email or alternate phone number on Microsoft Entra ID'
         }
 
         $rolesMembers.Add($object)
 
         if ($object.PrincipalType -eq 'group') {
-            $group = Get-MgGroup -GroupId $object.Principal
+            # need to get ID for Get-MgGroupMember
+            $group = Get-MgGroup -GroupId $object.Principal -Property Id, onPremisesSyncEnabled
+            $object | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $([bool]($group.onPremisesSyncEnabled -eq $true))
+
             #$group = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups/$($object.Principal)" -OutputType PSObject)
 
             $groupMembers = Get-MgGroupMember -GroupId $group.Id -Property displayName, userPrincipalName
@@ -197,16 +211,16 @@ function Get-MgRoleReport {
                 }
 
                 $object = [PSCustomObject][ordered]@{
-                    Principal              = $member.AdditionalProperties.userPrincipalName
-                    'PrincipalDisplayName' = $member.AdditionalProperties.displayName
-                    'PrincipalType'        = $memberType
-                    'AssignedRole'         = $mgRole.RoleDefinitionExtended.displayName
-                    'AssignedRoleScope'    = $mgRole.directoryScopeId
-                    'AssignmentType'       = if ($mgRole.status -eq 'Provisioned') { 'Eligible' } else { 'Permanent' }
-                    'IsBuiltIn'            = $mgRole.RoleDefinitionExtended.isBuiltIn
-                    'RoleTemplate'         = $mgRole.RoleDefinitionExtended.templateId
-                    DirectMember           = $false
-                    Recommendations        = 'Check if the user has alternate email or alternate phone number on Microsoft Entra ID'
+                    Principal            = $member.AdditionalProperties.userPrincipalName
+                    PrincipalDisplayName = $member.AdditionalProperties.displayName
+                    PrincipalType        = $memberType
+                    AssignedRole         = $mgRole.RoleDefinitionExtended.displayName
+                    AssignedRoleScope    = $mgRole.directoryScopeId
+                    AssignmentType       = if ($mgRole.status -eq 'Provisioned') { 'Eligible' } else { 'Permanent' }
+                    RoleIsBuiltIn        = $mgRole.RoleDefinitionExtended.isBuiltIn
+                    RoleTemplate         = $mgRole.RoleDefinitionExtended.templateId
+                    DirectMember         = $false
+                    Recommendations      = 'Check if the user has alternate email or alternate phone number on Microsoft Entra ID'
                 }
 
                 $rolesMembers.Add($object)
@@ -215,16 +229,19 @@ function Get-MgRoleReport {
     }
 
     $object = [PSCustomObject] [ordered]@{
-        Principal              = 'Partners'
-        'PrincipalDisplayName' = 'Partners'
-        'PrincipalType'        = 'Partners'
-        'AssignedRole'         = 'Partners'
-        'AssignedRoleScope'    = 'Partners'
-        'AssignmentType'       = 'Partners'
-        'IsBuiltIn'            = 'Partners'
-        'RoleTemplate'         = 'Partners'
-        DirectMember           = ''
-        Recommendations        = 'Please check this URL to identify if you have partner with admin roles https://admin.microsoft.com/AdminPortal/Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
+        Principal             = 'Partners'
+        PrincipalDisplayName  = 'Partners'
+        PrincipalType         = 'Partners'
+        AssignedRole          = 'Partners'
+        AssignedRoleScope     = 'Partners'
+        AssignmentType        = 'Partners'
+        RoleIsBuiltIn         = 'Not applicable'
+        RoleTemplate          = 'Not applicable'
+        DirectMember          = 'Not applicable'
+        Recommendations       = 'Please check this URL to identify if you have partner with admin roles https: / / admin.microsoft.com / AdminPortal / Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
+        LastSignInDateTime    = 'Not applicable'
+        AccountEnabled        = 'Not applicable'
+        onPremisesSyncEnabled = 'Not applicable'
     }    
     
     $rolesMembers.Add($object)
@@ -244,59 +261,82 @@ function Get-MgRoleReport {
         }
     }
 
-    [System.Collections.Generic.List[Object]]$usersCacheArray = @()
-    [System.Collections.Generic.List[Object]]$spCacheArray = @()
+    [System.Collections.Generic.List[Object]]$objectsCacheArray = @()
 
     foreach ($member in $rolesMembers) {
 
         $lastSignInDateTime = $null
         $accountEnabled = $null
         $onPremisesSyncEnabled = $null
-
-        if ($member.PrincipalType -eq 'user') {
-            if ($usersCacheArray.UserPrincipalName -Contains $member.Principal) {
-                $accountEnabled = ($usersCacheArray | Where-Object { $_.UserPrincipalName -eq $member.Principal }).AccountEnabled
-                $lastSignInDateTime = ($usersCacheArray | Where-Object { $_.UserPrincipalName -eq $member.Principal }).LastSignInDateTime
-                $onPremisesSyncEnabled = ($usersCacheArray | Where-Object { $_.UserPrincipalName -eq $member.Principal }).onPremisesSyncEnabled
-            }
-            else {
-                #$member.User = Get-MgUser -UserId $member.Principal -Property AccountEnabled, SignInActivity, onPremisesSyncEnabled
-                # If we use Get-MgUser -UserId $member.Principal -Property AccountEnabled, SignInActivity, onPremisesSyncEnabled, 
-                # we encounter the error 'Get-MgUser_Get: Get By Key only supports UserId, and the key must be a valid GUID'.
-                # This is because the sign-in data comes from a different source that requires a GUID to retrieve the account's sign-in activity. 
-                # Therefore, we must provide the account's object identifier for the command to function correctly.
-                # To overcome this issue, we use the -Filter parameter to search for the user by their UserPrincipalName.
-                $mgUser = Get-MgUser -Filter "UserPrincipalName eq '$($member.Principal)'" -Property UserPrincipalName, AccountEnabled, SignInActivity, onPremisesSyncEnabled | Select-Object UserPrincipalName, AccountEnabled, @{Name = 'LastSignInDateTime'; Expression = { $_.SignInActivity.LastSignInDateTime } }, onPremisesSyncEnabled
-                #$mgUser = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users?$filter=userPrincipalName eq '$($member.Principal)'" -OutputType PSObject).Value
-
-                $accountEnabled = $mgUser.AccountEnabled
-                $lastSignInDateTime = $mgUser.LastSignInDateTime
-                $onPremisesSyncEnabled = [bool]($mgUser.onPremisesSyncEnabled -eq $true)
-
-                # add the user to the cache to avoid multiple requests for this user
-                $usersCacheArray.Add($member)
-            }
+        
+        if ($objectsCacheArray.Principal -Contains $member.Principal) {
+            $accountEnabled = ($objectsCacheArray | Where-Object { $_.Principal -eq $member.Principal }).AccountEnabled
+            $lastSignInDateTime = ($objectsCacheArray | Where-Object { $_.Principal -eq $member.Principal }).LastSignInDateTime
+            $lastNonInteractiveSignInDateTime = ($objectsCacheArray | Where-Object { $_.Principal -eq $member.Principal }).LastNonInteractiveSignInDateTime
+            $onPremisesSyncEnabled = ($objectsCacheArray | Where-Object { $_.Principal -eq $member.Principal }).onPremisesSyncEnabled
         }
-        elseif ($member.PrincipalType -eq 'servicePrincipal') {
-            if ($spCacheArray.AppId -Contains $member.Principal) {
-                $accountEnabled = ($spCacheArray | Where-Object { $_.AppId -eq $member.Principal }).AccountEnabled
-                $lastSignInDateTime = ($spCacheArray | Where-Object { $_.AppId -eq $member.Principal }).LastSignInDateTime
-                $onPremisesSyncEnabled = ($spCacheArray | Where-Object { $_.AppId -eq $member.Principal }).onPremisesSyncEnabled
-            }
-            else {
-                $accountEnabled = 'Not applicable'
-                $lastSignInDateTime = (Get-MgBetaReportServicePrincipalSignInActivity -Filter "appId eq '$($member.Principal)'").LastSignInActivity.LastSignInDateTime
-                $onPremisesSyncEnabled = $false
+        else {
+            $lastSignInActivity = $null
 
-                # add the service principal to the cache to avoid multiple requests for this service principal
-                $spCacheArray.Add($member)
+            switch ($member.PrincipalType) {
+                'user' {
+                    # If we use Get-MgUser -UserId $member.Principal -Property AccountEnabled, SignInActivity, onPremisesSyncEnabled, 
+                    # we encounter the error 'Get-MgUser_Get: Get By Key only supports UserId, and the key must be a valid GUID'.
+                    # This is because the sign-in data comes from a different source that requires a GUID to retrieve the account's sign-in activity. 
+                    # Therefore, we must provide the account's object identifier for the command to function correctly.
+                    # To overcome this issue, we use the -Filter parameter to search for the user by their UserPrincipalName.
+                    $mgUser = Get-MgUser -Filter "UserPrincipalName eq '$($member.Principal)'" -Property AccountEnabled, SignInActivity, onPremisesSyncEnabled
+                    $accountEnabled = $mgUser.AccountEnabled
+                    $lastSignInDateTime = $mgUser.signInActivity.LastSignInDateTime
+                    $lastNonInteractiveSignInDateTime = $mgUser.signInActivity.LastNonInteractiveSignInDateTime
+                    $onPremisesSyncEnabled = [bool]($mgUser.onPremisesSyncEnabled -eq $true)
+
+                    $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+
+                    break
+                }
+
+                'group' {
+                    $accountEnabled = 'Not applicable'
+                    $lastSignInDateTime = 'Not applicable'
+                    $lastNonInteractiveSignInDateTime = 'Not applicable'
+                    # onpremisesSyncEnabled already get from Get-MgGroup in the previous loop
+                    
+                    break
+                }
+
+                'servicePrincipal' {
+                    $lastSignInActivity = (Get-MgBetaReportServicePrincipalSignInActivity -Filter "appId eq '$($member.Principal)'").LastSignInActivity
+                    $accountEnabled = 'Not applicable'
+                    $lastSignInDateTime = $lastSignInActivity.LastSignInDateTime
+                    $lastNonInteractiveSignInDateTime = $lastSignInActivity.LastNonInteractiveSignInDateTime
+                    $onPremisesSyncEnabled = $false
+                    
+                    $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+
+                    break
+                }
+                
+                'default' {
+                    $accountEnabled = 'Not applicable'
+                    $lastSignInDateTime = 'Not applicable'
+                    $lastNonInteractiveSignInDateTime = 'Not applicable'
+                    $onPremisesSyncEnabled = 'Not applicable'
+                    
+                    $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+                }
             }
         }
 
         $member | Add-Member -MemberType NoteProperty -Name 'LastSignInDateTime' -Value $lastSignInDateTime
+        $member | Add-Member -MemberType NoteProperty -Name 'LastNonInteractiveSignInDateTime' -Value $lastNonInteractiveSignInDateTime
         $member | Add-Member -MemberType NoteProperty -Name 'AccountEnabled' -Value $accountEnabled
-        $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
-    }
 
+        # only add if not already in the cache
+        if (-not $objectsCacheArray.Principal -Contains $member.Principal) {
+            $objectsCacheArray.Add($member)
+        }
+    }
+    
     return $rolesMembers
 }
