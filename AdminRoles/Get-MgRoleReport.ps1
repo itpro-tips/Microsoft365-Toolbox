@@ -320,7 +320,7 @@ function Get-MgRoleReport {
                     $lastNonInteractiveSignInDateTime = 'Not applicable'
                     $onPremisesSyncEnabled = 'Not applicable'
                     
-                    $member | Add-Member -MemberType NoteProperty -Name 'OnPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+                    $member | Add-Member -MemberType NoteProperty -Name 'OnPremisesSyncEnabled' -Value $false
                     
                     break
                 }
