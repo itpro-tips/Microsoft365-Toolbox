@@ -186,7 +186,7 @@ function Get-MgRoleReport {
         if ($object.PrincipalType -eq 'group') {
             # need to get ID for Get-MgGroupMember
             $group = Get-MgGroup -GroupId $object.Principal -Property Id, onPremisesSyncEnabled
-            $object | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $([bool]($group.onPremisesSyncEnabled -eq $true))
+            $object | Add-Member -MemberType NoteProperty -Name 'OnPremisesSyncEnabled' -Value $([bool]($group.onPremisesSyncEnabled -eq $true))
 
             #$group = (Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/groups/$($object.Principal)" -OutputType PSObject)
 
@@ -229,19 +229,16 @@ function Get-MgRoleReport {
     }
 
     $object = [PSCustomObject] [ordered]@{
-        Principal             = 'Partners'
-        PrincipalDisplayName  = 'Partners'
-        PrincipalType         = 'Partners'
-        AssignedRole          = 'Partners'
-        AssignedRoleScope     = 'Partners'
-        AssignmentType        = 'Partners'
-        RoleIsBuiltIn         = 'Not applicable'
-        RoleTemplate          = 'Not applicable'
-        DirectMember          = 'Not applicable'
-        Recommendations       = 'Please check this URL to identify if you have partner with admin roles https: / / admin.microsoft.com / AdminPortal / Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
-        LastSignInDateTime    = 'Not applicable'
-        AccountEnabled        = 'Not applicable'
-        onPremisesSyncEnabled = 'Not applicable'
+        Principal            = 'Partners'
+        PrincipalDisplayName = 'Partners'
+        PrincipalType        = 'Partners'
+        AssignedRole         = 'Partners'
+        AssignedRoleScope    = 'Partners'
+        AssignmentType       = 'Partners'
+        RoleIsBuiltIn        = 'Not applicable'
+        RoleTemplate         = 'Not applicable'
+        DirectMember         = 'Not applicable'
+        Recommendations      = 'Please check this URL to identify if you have partner with admin roles https: / / admin.microsoft.com / AdminPortal / Home#/partners. More information on https://practical365.com/identifying-potential-unwanted-access-by-your-msp-csp-reseller/'
     }    
     
     $rolesMembers.Add($object)
@@ -291,7 +288,7 @@ function Get-MgRoleReport {
                     $lastNonInteractiveSignInDateTime = $mgUser.signInActivity.LastNonInteractiveSignInDateTime
                     $onPremisesSyncEnabled = [bool]($mgUser.onPremisesSyncEnabled -eq $true)
 
-                    $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+                    $member | Add-Member -MemberType NoteProperty -Name 'OnPremisesSyncEnabled' -Value $onPremisesSyncEnabled
 
                     break
                 }
@@ -312,18 +309,29 @@ function Get-MgRoleReport {
                     $lastNonInteractiveSignInDateTime = $lastSignInActivity.LastNonInteractiveSignInDateTime
                     $onPremisesSyncEnabled = $false
                     
-                    $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+                    $member | Add-Member -MemberType NoteProperty -Name 'OnPremisesSyncEnabled' -Value $onPremisesSyncEnabled
 
                     break
                 }
                 
+                'Partners' {
+                    $accountEnabled = 'Not applicable'
+                    $lastSignInDateTime = 'Not applicable'
+                    $lastNonInteractiveSignInDateTime = 'Not applicable'
+                    $onPremisesSyncEnabled = 'Not applicable'
+                    
+                    $member | Add-Member -MemberType NoteProperty -Name 'OnPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+                    
+                    break
+                }
+
                 'default' {
                     $accountEnabled = 'Not applicable'
                     $lastSignInDateTime = 'Not applicable'
                     $lastNonInteractiveSignInDateTime = 'Not applicable'
                     $onPremisesSyncEnabled = 'Not applicable'
                     
-                    $member | Add-Member -MemberType NoteProperty -Name 'onPremisesSyncEnabled' -Value $onPremisesSyncEnabled
+                    $member | Add-Member -MemberType NoteProperty -Name 'OnPremisesSyncEnabled' -Value $onPremisesSyncEnabled
                 }
             }
         }
