@@ -18,7 +18,7 @@ function Get-MailAutoForwarded {
     $remoteDomains = Get-RemoteDomain
 
     foreach ($remoteDomain in $remoteDomains) {
-        Write-Host "Remote Domain '$remotedomain' AutoForwardEnabled: $($remoteDomain.AutoForwardEnabled)"  -ForegroundColor Cyan
+        Write-Host "Remote Domain '$remotedomain' AutoForwardEnabled: $($remoteDomain.AutoForwardEnabled)" -ForegroundColor Cyan
     }
 
     $outboundSpamPolicies = Get-HostedOutboundSpamFilterPolicy
@@ -43,6 +43,7 @@ function Get-MailAutoForwarded {
 
     Write-Host 'Get messages from the last' $days 'days' -ForegroundColor Cyan
 
+    Write-Host "`nIf you prefer, you can use the report in https://admin.cloud.microsoft/exchange?ref=/homepage#/reports/autoforwardedmessages`n" -ForegroundColor Green
     $params = @{}
 
     $params.Add('StartDate', (Get-Date).AddDays(-$days))
